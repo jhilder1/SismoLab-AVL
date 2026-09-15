@@ -1,20 +1,25 @@
-"""
-Entry point of the SismoLab AVL backend.
-
-The GUI never touches the domain objects directly: it talks to this HTTP
-layer, which delegates to the services. This keeps the separation between
-interface and business logic required by Section 2 of the specification.
-"""
+"""Entry point of the SismoLab AVL backend."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(
-    title="SismoLab AVL backend",
-    description="Backend for the SismoLab AVL tree project",
-    version="0.1.0",
+app = FastAPI(title="SismoLab AVL backend", version="0.1.0")
+
+# The GUI runs on a different port in development, so the browser treats it
+# as a different origin and blocks the responses unless we allow it here.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 @app.get("/health")
 def health() -> dict:
-    """Health check endpoint for the GUI to verify the backend is running."""
+    """Liveness probe for the GUI."""
     return {"status": "ok"}
