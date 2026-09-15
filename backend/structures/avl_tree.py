@@ -140,23 +140,108 @@ class AVLTree:
         return current
 
     def recover_balance(self):
-        """Recupera el balance si el árbol quedó desbalanceado en modo estrés."""
+        """Recupera el balance completo tras modo estrés."""
         self.stress_mode = False
-        self.root = self._recover_balance_recursive(self.root)
+        # Repetir pasadas hasta que todo esté balanceado
+        while not self.is_balanced():
+            self.root = self._recover_pass(self.root)
 
-    def _recover_balance_recursive(self, node: Optional[AVLNode]) -> Optional[AVLNode]:
+    def _recover_pass(self, node: Optional[AVLNode]) -> Optional[AVLNode]:
         if not node:
             return None
-            
-        # Postorden: primero repara hijos
-        node.left = self._recover_balance_recursive(node.left)
-        node.right = self._recover_balance_recursive(node.right)
         
+        node.left = self._recover_pass(node.left)
+        node.right = self._recover_pass(node.right)
         node.update_height()
-        
-        # Ciclo para manejar desbalances mayores a 2
+
         while abs(self.get_balance(node)) > 1:
             node = self._balance(node)
             node.update_height()
             
         return node
+
+    # --- Recorridos y búsquedas ---
+
+    def search(self, key: TreeKey) -> Optional[AVLNode]:
+        return self._search(self.root, key)
+
+    def _search(self, node: Optional[AVLNode], key: TreeKey) -> Optional[AVLNode]:
+        if not node:
+            return None
+        if key == node.key:
+            return node
+        if key < node.key:
+            return self._search(node.left, key)
+        return self._search(node.right, key)
+
+    def inorder(self) -> list[TreeKey]:
+        result = []
+        self._inorder(self.root, result)
+        return result
+
+    def _inorder(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._inorder(node.left, result)
+        result.append(node.key)
+        self._inorder(node.right, result)
+
+    def inorder_reverse(self) -> list[TreeKey]:
+        result = []
+        self._inorder_reverse(self.root, result)
+        return result
+
+    def _inorder_reverse(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._inorder_reverse(node.right, result)
+        result.append(node.key)
+        self._inorder_reverse(node.left, result)
+
+    def get_all_event_ids(self) -> list[int]:
+        result = []
+        self._collect_ids(self.root, result)
+        return result
+
+    def _collect_ids(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._collect_ids(node.left, result)
+        result.append(node.event_id)
+        self._collect_ids(node.right, result)
+
+    def collect_subtree_ids(self, node: Optional[AVLNode]) -> list[int]:
+        result = []
+        self._collect_ids(node, result)
+        return result
+
+    def get_depth(self, key: TreeKey) -> int:
+        return self._get_depth(self.root, key, 0)
+
+    def _get_depth(self, node: Optional[AVLNode], key: TreeKey, depth: int) -> int:
+        if not node:
+            return -1
+        if key == node.key:
+            return depth
+        if key < node.key:
+            return self._get_depth(node.left, key, depth + 1)
+        return self._get_depth(node.right, key, depth + 1)
+
+    def is_balanced(self) -> bool:
+        return self._check_balanced(self.root)
+
+    def _check_balanced(self, node: Optional[AVLNode]) -> bool:
+        if not node:
+            return True
+        if abs(self.get_balance(node)) > 1:
+            return False
+        return self._check_balanced(node.left) and self._check_balanced(node.right)
+
+    def reset_rotation_counts(self):
+        self.rotations_ll = 0
+        self.rotations_rr = 0
+        self.rotations_lr = 0
+        self.rotations_rl = 0
+
+    def total_rotations(self) -> int:
+        return self.rotations_ll + self.rotations_rr + self.rotations_lr + self.rotations_rl
