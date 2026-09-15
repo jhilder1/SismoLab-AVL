@@ -17,14 +17,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from config import Config
-from models.event import SeismicEvent
-from models.station import Station
-from models.zone import Zone
-from structures.avl_tree import AVLTree
-from structures.bst_tree import BSTTree
-from structures.report_queue import ReportQueue
-from structures.undo_stack import UndoStack
+from backend.config import Config
+from backend.models.event import SeismicEvent
+from backend.models.station import Station
+from backend.models.zone import Zone
+from backend.structures.avl_tree import AVLTree
+from backend.structures.bst_tree import BSTTree
+from backend.structures.report_queue import ReportQueue
+from backend.structures.undo_stack import UndoStack
 
 
 class Metrics:

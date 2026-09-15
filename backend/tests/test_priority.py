@@ -18,10 +18,10 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from models.enums import Priority
-from models.epicenter import Epicenter
-from models.zone import Zone
-from models.event import SeismicEvent
+from backend.models.enums import Priority
+from backend.models.epicenter import Epicenter
+from backend.models.zone import Zone
+from backend.models.event import SeismicEvent
 
 
 # ---- Shared test fixtures ----

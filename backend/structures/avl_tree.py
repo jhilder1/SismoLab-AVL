@@ -287,3 +287,64 @@ class AVLTree:
             node.update_height()
 
         return node
+    # --- Recorridos y búsquedas ---
+
+    def inorder(self) -> list[TreeKey]:
+        result = []
+        self._inorder(self.root, result)
+        return result
+
+    def _inorder(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._inorder(node.left, result)
+        result.append(node.key)
+        self._inorder(node.right, result)
+
+    def inorder_reverse(self) -> list[TreeKey]:
+        result = []
+        self._inorder_reverse(self.root, result)
+        return result
+
+    def _inorder_reverse(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._inorder_reverse(node.right, result)
+        result.append(node.key)
+        self._inorder_reverse(node.left, result)
+
+    def get_all_event_ids(self) -> list[int]:
+        result = []
+        self._collect_ids(self.root, result)
+        return result
+
+    def _collect_ids(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._collect_ids(node.left, result)
+        result.append(node.event_id)
+        self._collect_ids(node.right, result)
+
+    def collect_subtree_ids(self, node: Optional[AVLNode]) -> list[int]:
+        result = []
+        self._collect_ids(node, result)
+        return result
+
+    def is_balanced(self) -> bool:
+        return self._check_balanced(self.root)
+
+    def _check_balanced(self, node: Optional[AVLNode]) -> bool:
+        if not node:
+            return True
+        if abs(self.get_balance(node)) > 1:
+            return False
+        return self._check_balanced(node.left) and self._check_balanced(node.right)
+
+    def reset_rotation_counts(self):
+        self.rotations_ll = 0
+        self.rotations_rr = 0
+        self.rotations_lr = 0
+        self.rotations_rl = 0
+
+    def total_rotations(self) -> int:
+        return self.rotations_ll + self.rotations_rr + self.rotations_lr + self.rotations_rl

@@ -24,8 +24,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from structures.avl_tree import AVLTree
-from structures.tree_key import TreeKey
+from backend.structures.avl_tree import AVLTree
+from backend.structures.tree_key import TreeKey
 
 
 class EventoDePrueba:
