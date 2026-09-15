@@ -151,7 +151,7 @@ class SeismicEvent:
         This must be called after priority is (re)calculated.
         Import here to avoid circular dependency.
         """
-        from backend.structures.tree_key import TreeKey
+        from structures.tree_key import TreeKey
         return TreeKey(
             priority=int(self.priority),
             magnitude=self.magnitude,

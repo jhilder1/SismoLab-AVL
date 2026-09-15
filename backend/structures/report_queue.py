@@ -1,5 +1,5 @@
 from collections import deque
-from backend.models.report import Report
+from models.report import Report    
 
 class ReportQueue:
     def __init__(self):

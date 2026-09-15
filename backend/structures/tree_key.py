@@ -78,6 +78,17 @@ class TreeKey:
             return NotImplemented
         return self.to_tuple() != other.to_tuple()
 
+    def __hash__(self) -> int:
+        """
+        Required because __eq__ is defined.
+
+        When a class defines __eq__ without __hash__, Python sets
+        __hash__ = None and instances become unusable inside a set or as a
+        dictionary key. Keys are hashed by the same tuple they compare by,
+        so equal keys always hash equal.
+        """
+        return hash(self.to_tuple())
+
     # ----- Display -----
 
     def __repr__(self) -> str:
