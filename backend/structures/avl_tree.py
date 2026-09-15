@@ -348,3 +348,14 @@ class AVLTree:
 
     def total_rotations(self) -> int:
         return self.rotations_ll + self.rotations_rr + self.rotations_lr + self.rotations_rl
+
+    def count_leaves(self) -> int:
+        """Leaf count: an indicator of Section 14 and part of the AVL/BST comparison."""
+        return self._count_leaves(self.root)
+
+    def _count_leaves(self, node) -> int:
+        if not node:
+            return 0
+        if not node.left and not node.right:
+            return 1
+        return self._count_leaves(node.left) + self._count_leaves(node.right)

@@ -84,3 +84,51 @@ class Scenario:
             "total_archives": self.total_archives,
             "stress_mode": self.avl.stress_mode,
         })
+
+    def summary(self) -> dict:
+        """
+        Indicadores visibles que exige la sección 14, más los parámetros
+        vigentes. Todo endpoint que modifique algo devuelve esta misma forma,
+        para que la interfaz repinte la pantalla con una sola respuesta.
+        """
+        return {
+            "counts": {
+                "active": self.avl.size,
+                "archived": len(self.archived),
+                "deleted": len(self.deleted_ids),
+                "queued_reports": self.report_queue.size(),
+                "undo_depth": self.undo_stack.size(),
+            },
+            "tree": {
+                "height": self.avl.height,
+                "leaves": self.avl.count_leaves(),
+                "root": str(self.avl.root.key) if self.avl.root else None,
+                "balanced": self.avl.is_balanced(),
+            },
+            "rotations": {
+                "ll": self.avl.rotations_ll,
+                "rr": self.avl.rotations_rr,
+                "lr": self.avl.rotations_lr,
+                "rl": self.avl.rotations_rl,
+                "simple_left": self.avl.simple_turns_left,
+                "simple_right": self.avl.simple_turns_right,
+            },
+            "metrics": {
+                "events_created": self.total_events_created,
+                "reports_processed": self.total_reports_processed,
+                "corrections": self.total_corrections,
+                "archives": self.total_archives,
+            },
+            "parameters": {
+                "W_hours": self.W_hours,
+                "R_km": self.R_km,
+                "L_depth": self.L_depth,
+                "T_archive_hours": self.T_archive_hours,
+            },
+            "clock": self.clock.isoformat(),
+            "stress_mode": self.avl.stress_mode,
+        }
+# Instancia única compartida por todas las peticiones de este proceso.
+# Por eso uvicorn debe correr con un solo worker: dos procesos tendrían
+# cada uno su propio árbol.
+scenario = Scenario()
