@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SismoLab AVL</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header id="header">
+        <div class="header-left">
+            <h1>SismoLab <span class="accent">AVL</span></h1>
+            <span id="clock" class="clock">--</span>
+        </div>
+        <div class="header-right">
+            <span id="stress-badge" class="badge badge-off">Normal</span>
+            <button onclick="advanceClock()" class="btn btn-sm">Avanzar Reloj +1h</button>
+        </div>
+    </header>
+
+    <!-- STATS BAR -->
+    <div id="stats-bar" class="stats-bar">
+        <div class="stat"><span class="stat-val" id="st-active">0</span><span class="stat-lbl">Activos</span></div>
+        <div class="stat"><span class="stat-val" id="st-archived">0</span><span class="stat-lbl">Archivados</span></div>
+        <div class="stat"><span class="stat-val" id="st-deleted">0</span><span class="stat-lbl">Eliminados</span></div>
+        <div class="stat"><span class="stat-val" id="st-queue">0</span><span class="stat-lbl">Cola</span></div>
+        <div class="stat"><span class="stat-val" id="st-undo">0</span><span class="stat-lbl">Undo</span></div>
+        <div class="stat sep"><span class="stat-val" id="st-height">-1</span><span class="stat-lbl">Altura</span></div>
+        <div class="stat"><span class="stat-val" id="st-leaves">0</span><span class="stat-lbl">Hojas</span></div>
+        <div class="stat"><span class="stat-val" id="st-balanced">--</span><span class="stat-lbl">Balance</span></div>
+        <div class="stat sep"><span class="stat-val" id="st-ll">0</span><span class="stat-lbl">LL</span></div>
+        <div class="stat"><span class="stat-val" id="st-rr">0</span><span class="stat-lbl">RR</span></div>
+        <div class="stat"><span class="stat-val" id="st-lr">0</span><span class="stat-lbl">LR</span></div>
+        <div class="stat"><span class="stat-val" id="st-rl">0</span><span class="stat-lbl">RL</span></div>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <div class="main-layout">
+
+        <!-- LEFT PANEL: Controls -->
+        <aside id="panel-left" class="panel">
+
+            <!-- Crear Evento -->
+            <section class="card">
+                <h3>Crear Evento</h3>
+                <div class="form-row">
+                    <input type="number" id="ev-id" placeholder="ID (1-999999)" min="1" max="999999">
+                    <select id="ev-station"></select>
+                </div>
+                <div class="form-row">
+                    <input type="number" id="ev-mag" placeholder="Magnitud" step="0.1" min="-2" max="10">
+                    <input type="number" id="ev-depth" placeholder="Profundidad km" step="0.1" min="0" max="700">
+                </div>
+                <div class="form-row">
+                    <input type="number" id="ev-x" placeholder="Epicentro X" step="0.1" min="0" max="1000">
+                    <input type="number" id="ev-y" placeholder="Epicentro Y" step="0.1" min="0" max="1000">
+                </div>
+                <input type="datetime-local" id="ev-time" class="full-w">
+                <button onclick="createEvent()" class="btn btn-primary full-w">Crear Evento</button>
+            </section>
+
+            <!-- Corregir Evento -->
+            <section class="card">
+                <h3>Corregir Evento</h3>
+                <div class="form-row">
+                    <input type="number" id="cor-id" placeholder="ID del evento">
+                </div>
+                <div class="form-row">
+                    <input type="number" id="cor-mag" placeholder="Nueva magnitud" step="0.1">
+                    <input type="number" id="cor-depth" placeholder="Nueva prof." step="0.1">
+                </div>
+                <button onclick="correctEvent()" class="btn btn-warn full-w">Corregir</button>
+            </section>
+
+            <!-- Eliminar y Buscar -->
+            <section class="card">
+                <h3>Eliminar / Buscar</h3>
+                <div class="form-row">
+                    <input type="number" id="del-id" placeholder="ID del evento">
+                    <button onclick="deleteEvent()" class="btn btn-danger">Eliminar</button>
+                </div>
+                <div class="form-row">
+                    <input type="number" id="search-id" placeholder="ID del evento">
+                    <button onclick="searchEvent()" class="btn btn-info">Buscar</button>
+                </div>
+                <div id="search-result" class="result-box hidden"></div>
+            </section>
+
+            <!-- Reportes -->
+            <section class="card">
+                <h3>Encolar Reporte</h3>
+                <div class="form-row">
+                    <input type="number" id="rp-evid" placeholder="ID evento">
+                    <input type="number" id="rp-rev" placeholder="Revision" min="1">
+                </div>
+                <div class="form-row">
+                    <input type="number" id="rp-mag" placeholder="Magnitud" step="0.1">
+                    <input type="number" id="rp-depth" placeholder="Prof. km" step="0.1">
+                </div>
+                <div class="form-row">
+                    <input type="number" id="rp-x" placeholder="Epicentro X" step="0.1">
+                    <input type="number" id="rp-y" placeholder="Epicentro Y" step="0.1">
+                </div>
+                <div class="form-row">
+                    <input type="datetime-local" id="rp-time">
+                    <select id="rp-station"></select>
+                </div>
+                <div class="form-row">
+                    <button onclick="enqueueReport()" class="btn btn-primary">Encolar</button>
+                    <button onclick="processReport()" class="btn btn-info">Procesar Siguiente</button>
+                </div>
+            </section>
+
+            <!-- Acciones -->
+            <section class="card">
+                <h3>Acciones</h3>
+                <div class="form-row">
+                    <button onclick="undoAction()" class="btn btn-warn">Deshacer</button>
+                    <button onclick="runAudit()" class="btn btn-info">Auditar</button>
+                </div>
+                <div class="form-row">
+                    <button onclick="toggleStress()" class="btn btn-danger">Modo Estres</button>
+                    <button onclick="recoverBalance()" class="btn btn-primary">Recuperar Balance</button>
+                </div>
+                <div class="form-row">
+                    <button onclick="archiveEligible()" class="btn btn-sm full-w">Archivar Elegibles</button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- CENTER: Tree Visualization -->
+        <main id="tree-area" class="tree-area">
+            <div class="tree-header">
+                <h2>Arbol AVL</h2>
+                <span id="tree-root" class="tree-root-label">Raiz: --</span>
+            </div>
+            <div id="tree-container" class="tree-container">
+                <svg id="tree-svg"></svg>
+                <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>
+            </div>
+        </main>
+
+        <!-- RIGHT: Events List -->
+        <aside id="panel-right" class="panel panel-right">
+            <h3>Eventos Activos</h3>
+            <div id="events-list" class="events-list">
+                <p class="muted">Sin eventos.</p>
+            </div>
+        </aside>
+    </div>
+
+    <!-- LOG BAR -->
+    <div id="log-bar" class="log-bar">
+        <span id="log-msg" class="log-msg">Listo.</span>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

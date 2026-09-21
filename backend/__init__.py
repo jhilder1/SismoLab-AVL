@@ -1,1 +1,0 @@
-# SismoLab AVL - Backend Package

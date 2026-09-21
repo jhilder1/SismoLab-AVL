@@ -11,3 +11,7 @@ dist/
 .vscode/
 .idea/
 versions/
+
+# Carpetas viejas (ya consolidadas en core/ y domain/)
+backend/
+frontend/
