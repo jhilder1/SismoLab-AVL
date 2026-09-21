@@ -337,6 +337,44 @@ class AVLTree:
         result.append(node.key)
         self._inorder_reverse(node.left, result)
 
+    def preorder(self) -> list[TreeKey]:
+        result = []
+        self._preorder(self.root, result)
+        return result
+
+    def _preorder(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        result.append(node.key)
+        self._preorder(node.left, result)
+        self._preorder(node.right, result)
+
+    def postorder(self) -> list[TreeKey]:
+        result = []
+        self._postorder(self.root, result)
+        return result
+
+    def _postorder(self, node: Optional[AVLNode], result: list):
+        if not node:
+            return
+        self._postorder(node.left, result)
+        self._postorder(node.right, result)
+        result.append(node.key)
+
+    def level_order(self) -> list[TreeKey]:
+        if not self.root:
+            return []
+        result = []
+        queue = [self.root]
+        while queue:
+            current = queue.pop(0)
+            result.append(current.key)
+            if current.left:
+                queue.append(current.left)
+            if current.right:
+                queue.append(current.right)
+        return result
+
     def get_all_event_ids(self) -> list[int]:
         result = []
         self._collect_ids(self.root, result)
@@ -427,6 +465,25 @@ class BSTTree:
         self.root: Optional[BSTNode] = None
         self.size = 0
 
+    def get_height(self, node: Optional[BSTNode]) -> int:
+        if not node:
+            return -1
+        return 1 + max(self.get_height(node.left), self.get_height(node.right))
+
+    @property
+    def height(self) -> int:
+        return self.get_height(self.root)
+
+    def count_leaves(self) -> int:
+        return self._count_leaves(self.root)
+
+    def _count_leaves(self, node: Optional[BSTNode]) -> int:
+        if not node:
+            return 0
+        if not node.left and not node.right:
+            return 1
+        return self._count_leaves(node.left) + self._count_leaves(node.right)
+
     def insert(self, key: TreeKey):
         self.root = self._insert(self.root, key)
 
@@ -468,3 +525,137 @@ class BSTTree:
         while current.left is not None:
             current = current.left
         return current
+
+    def search(self, key: TreeKey) -> tuple[Optional[BSTNode], int]:
+        """Busca en el BST. Retorna (nodo, comparaciones)."""
+        current = self.root
+        visited = 0
+        while current is not None:
+            visited += 1
+            if key == current.key:
+                return current, visited
+            current = current.left if key < current.key else current.right
+        return None, visited
+
+    def inorder(self) -> list[TreeKey]:
+        result = []
+        self._inorder(self.root, result)
+        return result
+
+    def _inorder(self, node: Optional[BSTNode], result: list):
+        if not node:
+            return
+        self._inorder(node.left, result)
+        result.append(node.key)
+        self._inorder(node.right, result)
+
+    def preorder(self) -> list[TreeKey]:
+        result = []
+        self._preorder(self.root, result)
+        return result
+
+    def _preorder(self, node: Optional[BSTNode], result: list):
+        if not node:
+            return
+        result.append(node.key)
+        self._preorder(node.left, result)
+        self._preorder(node.right, result)
+
+    def postorder(self) -> list[TreeKey]:
+        result = []
+        self._postorder(self.root, result)
+        return result
+
+    def _postorder(self, node: Optional[BSTNode], result: list):
+        if not node:
+            return
+        self._postorder(node.left, result)
+        self._postorder(node.right, result)
+        result.append(node.key)
+
+    def level_order(self) -> list[TreeKey]:
+        if not self.root:
+            return []
+        result = []
+        queue = [self.root]
+        while queue:
+            current = queue.pop(0)
+            result.append(current.key)
+            if current.left:
+                queue.append(current.left)
+            if current.right:
+                queue.append(current.right)
+        return result
+
+    def to_dict(self) -> Optional[dict]:
+        return self._node_to_dict(self.root)
+
+    def _node_to_dict(self, node: Optional[BSTNode]) -> Optional[dict]:
+        if not node:
+            return None
+        return {
+            "key": str(node.key),
+            "event_id": node.event_id,
+            "priority": node.key.priority,
+            "magnitude": node.key.magnitude,
+            "height": self.get_height(node),
+            "left": self._node_to_dict(node.left),
+            "right": self._node_to_dict(node.right),
+        }
+
+
+# =====================================================================
+# Comparativa AVL vs BST (Sección 11 y 15)
+# =====================================================================
+
+class _DummyEvent:
+    def __init__(self, key: TreeKey):
+        self.key = key
+        self.event_id = key.event_id
+        self.priority = key.priority
+        self.magnitude = key.magnitude
+
+    def build_key(self) -> TreeKey:
+        return self.key
+
+
+def compare_trees(keys: list[TreeKey]) -> dict:
+    """
+    Inserta exactamente la misma secuencia de claves en un AVL y en un BST.
+    Compara: raíces, alturas, cantidad de hojas y número de comparaciones de búsqueda.
+    """
+    avl = AVLTree()
+    bst = BSTTree()
+
+    for k in keys:
+        avl.insert(_DummyEvent(k))
+        bst.insert(k)
+
+    # Comparar búsquedas de cada clave
+    avl_comps = [avl.search(k)[1] for k in keys]
+    bst_comps = [bst.search(k)[1] for k in keys]
+
+    total_keys = len(keys)
+    avg_avl_comps = (sum(avl_comps) / total_keys) if total_keys > 0 else 0.0
+    avg_bst_comps = (sum(bst_comps) / total_keys) if total_keys > 0 else 0.0
+
+    return {
+        "size": total_keys,
+        "avl": {
+            "root": str(avl.root.key) if avl.root else None,
+            "height": avl.height,
+            "leaves": avl.count_leaves(),
+            "total_comparisons": sum(avl_comps),
+            "avg_comparisons": round(avg_avl_comps, 2),
+            "tree": avl.to_dict(),
+        },
+        "bst": {
+            "root": str(bst.root.key) if bst.root else None,
+            "height": bst.height,
+            "leaves": bst.count_leaves(),
+            "total_comparisons": sum(bst_comps),
+            "avg_comparisons": round(avg_bst_comps, 2),
+            "tree": bst.to_dict(),
+        },
+    }
+

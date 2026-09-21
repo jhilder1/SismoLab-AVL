@@ -41,11 +41,14 @@ class Scenario:
         # Reloj de simulación
         self.clock: datetime = datetime(2026, 1, 1, 0, 0, 0)
 
-        # Métricas
+        # Métricas e indicadores (Sección 14)
         self.total_events_created = 0
         self.total_reports_processed = 0
         self.total_corrections = 0
         self.total_archives = 0
+        self.total_reports_discarded = 0
+        self.total_conflicts = 0
+        self.total_confirmations = 0
 
     def id_exists_anywhere(self, event_id: int) -> bool:
         return (event_id in self.event_index
@@ -72,11 +75,38 @@ class Scenario:
             "total_reports_processed": self.total_reports_processed,
             "total_corrections": self.total_corrections,
             "total_archives": self.total_archives,
+            "total_reports_discarded": self.total_reports_discarded,
+            "total_conflicts": self.total_conflicts,
+            "total_confirmations": self.total_confirmations,
             "stress_mode": self.avl.stress_mode,
         })
 
     def summary(self) -> dict:
         """Indicadores visibles (Sección 14) + parámetros vigentes."""
+        # Contadores por prioridad y estado de atención
+        p_high = 0
+        p_med = 0
+        p_low = 0
+        pending = 0
+        reviewed = 0
+        costly = 0
+
+        for e in self.event_index.values():
+            if e.priority == Priority.HIGH:
+                p_high += 1
+                depth = self.avl.get_depth(e.build_key())
+                if depth is not None and depth > self.L_depth:
+                    costly += 1
+            elif e.priority == Priority.MEDIUM:
+                p_med += 1
+            else:
+                p_low += 1
+
+            if e.attention_state == AttentionState.PENDING:
+                pending += 1
+            else:
+                reviewed += 1
+
         return {
             "counts": {
                 "active": self.avl.size,
@@ -84,6 +114,12 @@ class Scenario:
                 "deleted": len(self.deleted_ids),
                 "queued_reports": self.report_queue.size(),
                 "undo_depth": self.undo_stack.size(),
+                "priority_high": p_high,
+                "priority_medium": p_med,
+                "priority_low": p_low,
+                "pending": pending,
+                "reviewed": reviewed,
+                "costly_access": costly,
             },
             "tree": {
                 "height": self.avl.height,
@@ -91,6 +127,18 @@ class Scenario:
                 "root": str(self.avl.root.key) if self.avl.root else None,
                 "balanced": self.avl.is_balanced(),
                 "nodes": self.avl.to_dict(),
+            },
+            "bst": {
+                "height": self.bst.height,
+                "leaves": self.bst.count_leaves(),
+                "root": str(self.bst.root.key) if self.bst.root else None,
+                "nodes": self.bst.to_dict(),
+            },
+            "traversals": {
+                "inorder": [str(k) for k in self.avl.inorder()],
+                "preorder": [str(k) for k in self.avl.preorder()],
+                "postorder": [str(k) for k in self.avl.postorder()],
+                "level_order": [str(k) for k in self.avl.level_order()],
             },
             "rotations": {
                 "ll": self.avl.rotations_ll,
@@ -105,6 +153,9 @@ class Scenario:
                 "reports_processed": self.total_reports_processed,
                 "corrections": self.total_corrections,
                 "archives": self.total_archives,
+                "reports_discarded": self.total_reports_discarded,
+                "conflicts": self.total_conflicts,
+                "confirmations": self.total_confirmations,
             },
             "parameters": {
                 "W_hours": self.W_hours,
@@ -115,6 +166,10 @@ class Scenario:
             "clock": self.clock.isoformat(),
             "stress_mode": self.avl.stress_mode,
             "events": [e.to_dict() for e in self.event_index.values()],
+            "archived_events": [e.to_dict() for e in self.archived.values()],
+            "queued_reports": [r.to_dict() for r in self.report_queue.get_all()],
+            "zones": [z.to_dict() for z in self.zones],
+            "stations": [s.to_dict() for s in self.stations.values()],
         }
 
     # ================================================================
@@ -157,7 +212,7 @@ class Scenario:
             "description": f"Crear evento {event.format_id()} M={event.magnitude}",
         })
 
-        self._calculate_association(event_id)
+        self.recalculate_all_associations()
         return event
 
     # --- Corregir evento ---
@@ -200,7 +255,7 @@ class Scenario:
             "description": f"Corregir evento {event.format_id()} rev={event.revision}",
         })
 
-        self._calculate_association(event_id)
+        self.recalculate_all_associations()
         return event
 
     # --- Eliminar evento ---
@@ -220,6 +275,8 @@ class Scenario:
 
         if event_id in self.associations:
             del self.associations[event_id]
+
+        self.recalculate_all_associations()
 
         self.undo_stack.push({
             "type": "DELETE", "before": before,
@@ -254,62 +311,110 @@ class Scenario:
         report = self.report_queue.dequeue()
         event = self.get_event(report.event_id)
 
-        # Caso 1: ID desconocido → crear nuevo
-        if not event and report.event_id not in self.deleted_ids:
-            if not self.id_exists_anywhere(report.event_id):
-                try:
-                    new_event = SeismicEvent(
-                        event_id=report.event_id, magnitude=report.magnitude,
-                        depth_km=report.depth_km,
-                        epicenter=Epicenter(report.epicenter.x, report.epicenter.y),
-                        occurrence_time=report.occurrence_time,
-                        station_id=report.station_id, zones=self.zones,
-                    )
-                    self.avl.insert(new_event)
-                    self.bst.insert(new_event.build_key())
-                    self.event_index[report.event_id] = new_event
-                    self.total_events_created += 1
-                    self._calculate_association(report.event_id)
-                    result = {"result": "CREATED", "event_id": report.event_id}
-                except ValueError as e:
-                    result = {"result": "REJECTED", "reason": str(e)}
+        # Caso A: ID eliminado → rechazo total (Sección 6)
+        if report.event_id in self.deleted_ids:
+            self.total_reports_discarded += 1
+            result = {"result": "REJECTED", "event_id": report.event_id,
+                      "reason": "Evento eliminado, no se aceptan reportes posteriores"}
+
+        # Caso B: ID archivado (Sección 6: reactivación con rev > vigente)
+        elif report.event_id in self.archived:
+            archived_event = self.archived[report.event_id]
+            if report.revision > archived_event.revision:
+                new_epi = Epicenter(report.epicenter.x, report.epicenter.y)
+                archived_event.apply_correction(
+                    magnitude=report.magnitude, depth_km=report.depth_km,
+                    epicenter=new_epi, occurrence_time=report.occurrence_time,
+                    zones=self.zones,
+                )
+                archived_event.status = EventStatus.ACTIVE
+                archived_event.attention_state = AttentionState.PENDING
+                archived_event.revision = report.revision
+                archived_event.reporting_stations.add(report.station_id)
+                del self.archived[report.event_id]
+                self.event_index[report.event_id] = archived_event
+                self.avl.insert(archived_event)
+                self.bst.insert(archived_event.build_key())
+                self.total_corrections += 1
+                self._calculate_association(report.event_id)
+                self.recalculate_all_associations()
+                result = {"result": "REACTIVATED", "event_id": report.event_id, "revision": report.revision}
+            elif report.revision == archived_event.revision:
+                same_data = report.data_equals(
+                    archived_event.magnitude, archived_event.depth_km,
+                    archived_event.epicenter, archived_event.occurrence_time,
+                )
+                if same_data:
+                    archived_event.reporting_stations.add(report.station_id)
+                    self.total_confirmations += 1
+                    result = {"result": "CONFIRMED_ARCHIVED", "event_id": report.event_id}
+                else:
+                    self.total_conflicts += 1
+                    result = {"result": "CONFLICT", "event_id": report.event_id,
+                              "reason": "Misma revisión pero datos diferentes en evento archivado"}
             else:
-                result = {"result": "REJECTED", "reason": "ID ya existe (archivado/eliminado)"}
-        elif not event:
-            result = {"result": "REJECTED", "reason": "Evento eliminado, no se aceptan reportes"}
-        # Caso 2: Revisión mayor → corrección
-        elif report.revision > event.revision:
-            old_key = event.build_key()
-            new_epi = Epicenter(report.epicenter.x, report.epicenter.y)
-            new_key = event.apply_correction(
-                magnitude=report.magnitude, depth_km=report.depth_km,
-                epicenter=new_epi, occurrence_time=report.occurrence_time,
-                zones=self.zones,
-            )
-            if old_key != new_key:
-                self.avl.delete(old_key)
-                self.avl.insert(event)
-                self.bst.delete(old_key)
-                self.bst.insert(new_key)
-            event.reporting_stations.add(report.station_id)
-            event.revision = report.revision
-            self.total_corrections += 1
-            self._calculate_association(report.event_id)
-            result = {"result": "CORRECTED", "event_id": report.event_id, "revision": report.revision}
-        # Caso 3: Misma revisión, mismos datos → confirmación
-        elif report.revision == event.revision:
-            same_data = report.data_equals(
-                event.magnitude, event.depth_km, event.epicenter, event.occurrence_time)
-            if same_data:
+                self.total_reports_discarded += 1
+                result = {"result": "OUTDATED", "event_id": report.event_id,
+                          "report_rev": report.revision, "current_rev": archived_event.revision}
+
+        # Caso C: ID activo
+        elif event:
+            if report.revision > event.revision:
+                old_key = event.build_key()
+                new_epi = Epicenter(report.epicenter.x, report.epicenter.y)
+                new_key = event.apply_correction(
+                    magnitude=report.magnitude, depth_km=report.depth_km,
+                    epicenter=new_epi, occurrence_time=report.occurrence_time,
+                    zones=self.zones,
+                )
+                if old_key != new_key:
+                    self.avl.delete(old_key)
+                    self.avl.insert(event)
+                    self.bst.delete(old_key)
+                    self.bst.insert(new_key)
                 event.reporting_stations.add(report.station_id)
-                result = {"result": "CONFIRMED", "event_id": report.event_id}
+                event.revision = report.revision
+                self.total_corrections += 1
+                self._calculate_association(report.event_id)
+                self.recalculate_all_associations()
+                result = {"result": "CORRECTED", "event_id": report.event_id, "revision": report.revision}
+            elif report.revision == event.revision:
+                same_data = report.data_equals(
+                    event.magnitude, event.depth_km, event.epicenter, event.occurrence_time,
+                )
+                if same_data:
+                    event.reporting_stations.add(report.station_id)
+                    self.total_confirmations += 1
+                    result = {"result": "CONFIRMED", "event_id": report.event_id}
+                else:
+                    self.total_conflicts += 1
+                    result = {"result": "CONFLICT", "event_id": report.event_id,
+                              "reason": "Misma revisión pero datos diferentes"}
             else:
-                result = {"result": "CONFLICT", "event_id": report.event_id,
-                          "reason": "Misma revisión pero datos diferentes"}
-        # Caso 4: Revisión menor → descartado
+                self.total_reports_discarded += 1
+                result = {"result": "OUTDATED", "event_id": report.event_id,
+                          "report_rev": report.revision, "current_rev": event.revision}
+
+        # Caso D: ID nuevo desconocido
         else:
-            result = {"result": "OUTDATED", "event_id": report.event_id,
-                      "report_rev": report.revision, "current_rev": event.revision}
+            try:
+                new_event = SeismicEvent(
+                    event_id=report.event_id, magnitude=report.magnitude,
+                    depth_km=report.depth_km,
+                    epicenter=Epicenter(report.epicenter.x, report.epicenter.y),
+                    occurrence_time=report.occurrence_time,
+                    station_id=report.station_id, zones=self.zones,
+                    revision=report.revision,
+                )
+                self.avl.insert(new_event)
+                self.bst.insert(new_event.build_key())
+                self.event_index[report.event_id] = new_event
+                self.total_events_created += 1
+                self._calculate_association(report.event_id)
+                result = {"result": "CREATED", "event_id": report.event_id}
+            except ValueError as e:
+                self.total_reports_discarded += 1
+                result = {"result": "REJECTED", "reason": str(e)}
 
         self.total_reports_processed += 1
         self.undo_stack.push({
@@ -458,6 +563,9 @@ class Scenario:
         self.total_reports_processed = before["total_reports_processed"]
         self.total_corrections = before["total_corrections"]
         self.total_archives = before["total_archives"]
+        self.total_reports_discarded = before.get("total_reports_discarded", 0)
+        self.total_conflicts = before.get("total_conflicts", 0)
+        self.total_confirmations = before.get("total_confirmations", 0)
         self.avl.stress_mode = before["stress_mode"]
 
         for eid, snap in before["event_index"].items():
@@ -497,6 +605,12 @@ class Scenario:
         self.associations.clear()
         for eid, a_dict in before["associations"].items():
             self.associations[eid] = Association.from_dict(a_dict)
+
+        # Si la acción fue procesar un reporte, restaurarlo en la cola (Sección 13)
+        if action.get("type") == "PROCESS_REPORT" and "report" in action:
+            r_data = action["report"]
+            r_obj = Report.from_dict(r_data) if isinstance(r_data, dict) else r_data
+            self.report_queue.restore_at_front(r_obj)
 
         return {
             "result": "UNDONE",
@@ -587,3 +701,178 @@ class Scenario:
             return {"result": "NOT_IN_STRESS", "message": "El árbol no está en modo estrés"}
         cost = self.avl.recover_balance()
         return {"result": "RECOVERED", "cost": cost}
+
+    # ================================================================
+    # Consultas y análisis del desempeño (Sección 11)
+    # ================================================================
+
+    def query_top_k_pending(self, k: int) -> dict:
+        """
+        Los primeros k eventos pendientes de atención en orden descendente de K.
+        Recorre el árbol en orden inverso (derecha a izquierda) y poda la búsqueda
+        al alcanzar k elementos.
+        Reporta la cantidad de nodos examinados.
+        """
+        if k <= 0:
+            return {"results": [], "nodes_examined": 0, "k": k, "count": 0}
+
+        results = []
+        nodes_examined = 0
+
+        def traverse_reverse(node):
+            nonlocal nodes_examined
+            if not node or len(results) >= k:
+                return
+            traverse_reverse(node.right)
+            if len(results) >= k:
+                return
+            nodes_examined += 1
+            event = node.event
+            if event and event.attention_state == AttentionState.PENDING:
+                results.append(event.to_dict())
+            if len(results) >= k:
+                return
+            traverse_reverse(node.left)
+
+        traverse_reverse(self.avl.root)
+        return {
+            "results": results,
+            "nodes_examined": nodes_examined,
+            "k": k,
+            "count": len(results),
+        }
+
+    def query_by_interval(self, min_mag: float, max_mag: float,
+                          max_depth: Optional[float] = None,
+                          start_date: Optional[datetime] = None,
+                          end_date: Optional[datetime] = None) -> dict:
+        """
+        Eventos dentro de un intervalo inclusivo de magnitud [min_mag, max_mag],
+        y eventos con profundidad <= max_depth en intervalo de fechas [start_date, end_date].
+        Reporta la cantidad de nodos del AVL examinados.
+        """
+        matched = []
+        nodes_examined = 0
+
+        def traverse(node):
+            nonlocal nodes_examined
+            if not node:
+                return
+            nodes_examined += 1
+            e = node.event
+            if e:
+                mag_ok = (min_mag <= e.magnitude <= max_mag)
+                depth_ok = (max_depth is None or e.depth_km <= max_depth)
+                date_ok = True
+                if start_date and e.occurrence_time < start_date:
+                    date_ok = False
+                if end_date and e.occurrence_time > end_date:
+                    date_ok = False
+
+                if mag_ok and depth_ok and date_ok:
+                    matched.append(e.to_dict())
+
+            traverse(node.left)
+            traverse(node.right)
+
+        traverse(self.avl.root)
+        return {
+            "results": matched,
+            "nodes_examined": nodes_examined,
+            "count": len(matched),
+        }
+
+    def query_event_associations(self, event_id: int) -> dict:
+        """
+        Candidatos y referencia elegida para un evento, así como los eventos que
+        lo utilizan como referencia. Identifica si cada resultado está activo o archivado.
+        """
+        event = self.event_index.get(event_id) or self.archived.get(event_id)
+        if not event:
+            raise ValueError(f"Evento {event_id} no encontrado")
+
+        status_str = "ACTIVO" if event_id in self.event_index else "ARCHIVADO"
+
+        # Candidatos
+        raw_candidates = self._find_candidates(event)
+        candidates_info = []
+        for c in raw_candidates:
+            c_status = "ACTIVO" if c.event_id in self.event_index else "ARCHIVADO"
+            dist = round(event.epicenter.distance_to(c.epicenter), 1)
+            hours = round(abs((event.occurrence_time - c.occurrence_time).total_seconds() / 3600), 1)
+            candidates_info.append({
+                "event_id": c.event_id,
+                "magnitude": c.magnitude,
+                "depth_km": c.depth_km,
+                "distance_km": dist,
+                "time_delta_hours": hours,
+                "status": c_status,
+            })
+
+        # Referencia elegida
+        ref_info = None
+        if event.reference_event_id:
+            ref_event = self.event_index.get(event.reference_event_id) or self.archived.get(event.reference_event_id)
+            if ref_event:
+                r_status = "ACTIVO" if ref_event.event_id in self.event_index else "ARCHIVADO"
+                ref_info = {
+                    "event_id": ref_event.event_id,
+                    "magnitude": ref_event.magnitude,
+                    "status": r_status,
+                }
+
+        # Eventos que usan este evento como referencia (réplicas)
+        replicas = []
+        all_events = list(self.event_index.values()) + list(self.archived.values())
+        for other in all_events:
+            if other.reference_event_id == event_id:
+                rep_status = "ACTIVO" if other.event_id in self.event_index else "ARCHIVADO"
+                replicas.append({
+                    "event_id": other.event_id,
+                    "magnitude": other.magnitude,
+                    "status": rep_status,
+                })
+
+        return {
+            "event_id": event_id,
+            "status": status_str,
+            "reference": ref_info,
+            "candidates": candidates_info,
+            "replicas": replicas,
+        }
+
+    def query_costly_high_priority(self) -> dict:
+        """
+        Eventos de prioridad alta (P=3) con acceso costoso (profundidad > L).
+        Indica profundidad del nodo, límite L y número de nodos visitados en su búsqueda por clave.
+        """
+        results = []
+        for e in self.event_index.values():
+            if e.priority == Priority.HIGH:
+                key = e.build_key()
+                node, visited = self.avl.search(key)
+                depth = visited - 1 if node else None
+                if depth is not None and depth > self.L_depth:
+                    results.append({
+                        "event_id": e.event_id,
+                        "key": str(key),
+                        "depth": depth,
+                        "limit_L": self.L_depth,
+                        "nodes_visited": visited,
+                        "event": e.to_dict(),
+                    })
+
+        return {
+            "limit_L": self.L_depth,
+            "costly_events": results,
+            "count": len(results),
+        }
+
+    def compare_current_trees(self) -> dict:
+        """
+        Compara las estructuras AVL y BST del escenario actual.
+        """
+        keys = self.avl.inorder()
+        from core.avl_tree import compare_trees
+        return compare_trees(keys)
+

@@ -216,8 +216,121 @@ def test_scenario_summary():
 
 
 # =====================================================================
+# Tests de Fase 1: Recorridos, BST, Reactivación, Consultas y Undo
+# =====================================================================
+
+def test_avl_all_traversals():
+    tree = AVLTree()
+    for i in [4, 2, 6, 1, 3, 5, 7]:
+        tree.insert(FakeEvent(i, 2, float(i)))
+
+    inorder_ids = [k.event_id for k in tree.inorder()]
+    assert inorder_ids == [1, 2, 3, 4, 5, 6, 7]
+
+    preorder_ids = [k.event_id for k in tree.preorder()]
+    assert len(preorder_ids) == 7
+    assert preorder_ids[0] == 4  # raíz
+
+    postorder_ids = [k.event_id for k in tree.postorder()]
+    assert len(postorder_ids) == 7
+    assert postorder_ids[-1] == 4  # raíz al final
+
+    level_ids = [k.event_id for k in tree.level_order()]
+    assert level_ids == [4, 2, 6, 1, 3, 5, 7]
+
+
+def test_bst_features():
+    from core.avl_tree import compare_trees
+    bst = BSTTree()
+    keys = [TreeKey(2, float(i), i) for i in [4, 2, 6, 1, 3]]
+    for k in keys:
+        bst.insert(k)
+    assert bst.size == 5
+    assert bst.height >= 2
+    assert bst.count_leaves() >= 2
+    node, comps = bst.search(keys[0])
+    assert node is not None
+    assert comps == 1  # raíz encontrada en 1 comparación
+
+    comp_result = compare_trees(keys)
+    assert "avl" in comp_result
+    assert "bst" in comp_result
+    assert comp_result["avl"]["total_comparisons"] > 0
+
+
+def test_reactivate_archived_event():
+    sc = _make_scenario()
+    e = sc.create_event(10, 3.0, 50.0, 100.0, 100.0,
+                        datetime(2026, 5, 1, 10, 0, 0), "EST-001")
+    sc.clock = datetime(2026, 5, 10, 10, 0, 0)
+    res = sc.archive_largest_eligible()
+    assert res["result"] == "ARCHIVED"
+    assert 10 in sc.archived
+    assert 10 not in sc.event_index
+    assert sc.avl.size == 0
+
+    rep = Report(
+        event_id=10, revision=2, station_id="EST-001",
+        magnitude=5.5, depth_km=20.0,
+        epicenter=Epicenter(100.0, 100.0),
+        occurrence_time=datetime(2026, 5, 1, 10, 0, 0),
+    )
+    sc.enqueue_report(rep)
+    proc_res = sc.process_next_report()
+    assert proc_res["result"] == "REACTIVATED"
+    assert 10 in sc.event_index
+    assert 10 not in sc.archived
+    assert sc.avl.size == 1
+    assert sc.get_event(10).magnitude == 5.5
+    assert sc.get_event(10).attention_state == AttentionState.PENDING
+
+
+def test_undo_restores_queue_position():
+    sc = _make_scenario()
+    rep = Report(
+        event_id=99, revision=1, station_id="EST-001",
+        magnitude=4.0, depth_km=30.0,
+        epicenter=Epicenter(50.0, 50.0),
+        occurrence_time=datetime(2026, 6, 1, 9, 0, 0),
+    )
+    sc.enqueue_report(rep)
+    assert sc.report_queue.size() == 1
+    sc.process_next_report()
+    assert sc.report_queue.size() == 0
+    assert 99 in sc.event_index
+
+    sc.undo()
+    assert 99 not in sc.event_index
+    assert sc.report_queue.size() == 1
+    assert sc.report_queue.peek().event_id == 99
+
+
+def test_queries_section_11():
+    sc = _make_scenario()
+    sc.create_event(1, 4.0, 20.0, 100.0, 100.0, datetime(2026, 6, 1, 10, 0, 0), "EST-001")
+    sc.create_event(2, 6.5, 15.0, 110.0, 100.0, datetime(2026, 6, 1, 9, 0, 0), "EST-001")
+    sc.create_event(3, 7.0, 25.0, 105.0, 102.0, datetime(2026, 6, 1, 8, 0, 0), "EST-001")
+
+    top = sc.query_top_k_pending(k=2)
+    assert len(top["results"]) == 2
+    assert top["nodes_examined"] >= 2
+    assert top["results"][0]["magnitude"] >= top["results"][1]["magnitude"]
+
+    interval_res = sc.query_by_interval(min_mag=6.0, max_mag=8.0)
+    assert len(interval_res["results"]) == 2
+    assert interval_res["nodes_examined"] == 3
+
+    assoc = sc.query_event_associations(1)
+    assert assoc["event_id"] == 1
+    assert assoc["status"] == "ACTIVO"
+    assert len(assoc["candidates"]) > 0
+    assert assoc["reference"] is not None
+
+
+# =====================================================================
 # Ejecutar todos los tests
 # =====================================================================
+
 
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]

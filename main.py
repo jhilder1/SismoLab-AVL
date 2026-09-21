@@ -187,6 +187,83 @@ def archive_eligible():
     return sc.archive_largest_eligible()
 
 
+@eel.expose
+def query_top_k_pending(k=5):
+    """Retorna los primeros k eventos pendientes en orden descendente de K."""
+    try:
+        return {"ok": True, "data": sc.query_top_k_pending(int(k))}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def query_by_interval(min_mag, max_mag, max_depth=None, start_date_str=None, end_date_str=None):
+    """Consulta eventos por rango de magnitud, profundidad y fechas."""
+    try:
+        s_date = datetime.fromisoformat(start_date_str) if start_date_str else None
+        e_date = datetime.fromisoformat(end_date_str) if end_date_str else None
+        m_depth = float(max_depth) if max_depth not in (None, "", "null") else None
+        res = sc.query_by_interval(float(min_mag), float(max_mag), m_depth, s_date, e_date)
+        return {"ok": True, "data": res}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def query_event_associations(event_id):
+    """Consulta candidatos, referencia y réplicas de un evento."""
+    try:
+        res = sc.query_event_associations(int(event_id))
+        return {"ok": True, "data": res}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def query_costly_high_priority():
+    """Consulta eventos de prioridad alta con acceso costoso (profundidad > L)."""
+    try:
+        res = sc.query_costly_high_priority()
+        return {"ok": True, "data": res}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def compare_trees_view():
+    """Retorna comparativa estructural entre AVL y BST."""
+    try:
+        res = sc.compare_current_trees()
+        return {"ok": True, "data": res}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=None):
+    """Actualiza parámetros del escenario (W, R, L, T). Registra acción en undo."""
+    try:
+        before = sc.snapshot()
+        if w_hours is not None:
+            sc.W_hours = float(w_hours)
+        if r_km is not None:
+            sc.R_km = float(r_km)
+        if l_depth is not None:
+            sc.L_depth = int(l_depth)
+        if t_archive_hours is not None:
+            sc.T_archive_hours = float(t_archive_hours)
+
+        sc.recalculate_all_associations()
+        sc.undo_stack.push({
+            "type": "PARAM_UPDATE", "before": before,
+            "description": f"Actualizar parámetros W={sc.W_hours}h R={sc.R_km}km L={sc.L_depth} T={sc.T_archive_hours}h",
+        })
+        return {"ok": True, "message": "Parámetros actualizados exitosamente"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+
 # =================================================================
 # Arrancar la aplicación
 # =================================================================
