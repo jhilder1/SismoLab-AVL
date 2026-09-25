@@ -6,9 +6,33 @@ from __future__ import annotations
 
 import copy
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum, Enum
 from typing import Optional
+
+
+# =====================================================================
+# UTC time format for JSON (Section 3: ISO 8601, e.g. 2026-09-07T10:00:00Z)
+# =====================================================================
+
+def format_time(moment: datetime) -> str:
+    """Serialize a naive UTC datetime as ISO 8601 with the 'Z' suffix."""
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_time(text: str) -> datetime:
+    """Parse ISO 8601 text into a naive UTC datetime with second precision.
+
+    Accepts the 'Z' suffix, explicit offsets and plain text without zone
+    (read as UTC), so comparisons never mix aware and naive datetimes.
+    """
+    value = text.strip()
+    if value.endswith(("Z", "z")):
+        value = value[:-1] + "+00:00"
+    moment = datetime.fromisoformat(value)
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return moment.replace(microsecond=0)
 
 
 # =====================================================================
@@ -176,14 +200,14 @@ class Report:
         return {"event_id": self.event_id, "revision": self.revision,
                 "station_id": self.station_id, "magnitude": self.magnitude,
                 "depth_km": self.depth_km, "epicenter": self.epicenter.to_dict(),
-                "occurrence_time": self.occurrence_time.isoformat()}
+                "occurrence_time": format_time(self.occurrence_time)}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Report":
         return cls(event_id=data["event_id"], revision=data["revision"],
                    station_id=data["station_id"], magnitude=data["magnitude"],
                    depth_km=data["depth_km"], epicenter=Epicenter.from_dict(data["epicenter"]),
-                   occurrence_time=datetime.fromisoformat(data["occurrence_time"]))
+                   occurrence_time=parse_time(data["occurrence_time"]))
 
 
 # =====================================================================
@@ -340,7 +364,7 @@ class SeismicEvent:
         return {
             "event_id": self.event_id, "magnitude": self.magnitude,
             "depth_km": self.depth_km, "epicenter": self.epicenter.to_dict(),
-            "occurrence_time": self.occurrence_time.isoformat(),
+            "occurrence_time": format_time(self.occurrence_time),
             "revision": self.revision,
             "reporting_stations": sorted(self.reporting_stations),
             "priority": int(self.priority),
@@ -357,7 +381,7 @@ class SeismicEvent:
         event.magnitude = round(data["magnitude"], 1)
         event.depth_km = round(data["depth_km"], 1)
         event.epicenter = Epicenter.from_dict(data["epicenter"])
-        event.occurrence_time = datetime.fromisoformat(data["occurrence_time"])
+        event.occurrence_time = parse_time(data["occurrence_time"])
         event.revision = data["revision"]
         event.reporting_stations = set(data.get("reporting_stations", []))
         event.attention_state = AttentionState(data.get("attention_state", "pending"))
