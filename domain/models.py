@@ -4,7 +4,6 @@ Modelos de dominio: enums, epicentro, zona, estación, reporte, asociación y ev
 
 from __future__ import annotations
 
-import copy
 import math
 from datetime import datetime, timezone
 from enum import IntEnum, Enum
@@ -330,33 +329,6 @@ class SeismicEvent:
     def __repr__(self) -> str:
         return (f"SeismicEvent({self.format_id()}, M={self.magnitude}, "
                 f"P={self.priority.name}, {self.attention_state.value}, rev={self.revision})")
-
-    # --- Snapshot para undo ---
-
-    def snapshot(self) -> dict:
-        return {
-            "event_id": self.event_id, "magnitude": self.magnitude,
-            "depth_km": self.depth_km,
-            "epicenter": Epicenter(self.epicenter.x, self.epicenter.y),
-            "occurrence_time": self.occurrence_time, "revision": self.revision,
-            "reporting_stations": set(self.reporting_stations),
-            "priority": self.priority, "attention_state": self.attention_state,
-            "status": self.status, "in_populated_zone": self.in_populated_zone,
-            "reference_event_id": self.reference_event_id,
-        }
-
-    def restore_from_snapshot(self, snap: dict) -> None:
-        self.magnitude = snap["magnitude"]
-        self.depth_km = snap["depth_km"]
-        self.epicenter = snap["epicenter"]
-        self.occurrence_time = snap["occurrence_time"]
-        self.revision = snap["revision"]
-        self.reporting_stations = set(snap["reporting_stations"])
-        self.priority = snap["priority"]
-        self.attention_state = snap["attention_state"]
-        self.status = snap["status"]
-        self.in_populated_zone = snap["in_populated_zone"]
-        self.reference_event_id = snap["reference_event_id"]
 
     # --- Serialización JSON ---
 

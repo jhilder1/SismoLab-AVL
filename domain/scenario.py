@@ -5,7 +5,6 @@ Contiene el AVL, BST, índice de eventos, archivados, cola, pila, zonas,
 estaciones, parámetros y métricas. Toda operación pasa por aquí.
 """
 
-import copy
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -13,6 +12,7 @@ from domain.models import (
     SeismicEvent, Report, Association, Epicenter, Zone, Station,
     Priority, AttentionState, EventStatus,
 )
+from domain.storage import scenario_to_dict, apply_state
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
 
@@ -59,26 +59,17 @@ class Scenario:
         return self.event_index.get(event_id)
 
     def snapshot(self) -> dict:
-        """Deep copy del estado completo para undo."""
-        return copy.deepcopy({
-            "event_index": {eid: e.snapshot() for eid, e in self.event_index.items()},
-            "archived": {eid: e.snapshot() for eid, e in self.archived.items()},
-            "deleted_ids": set(self.deleted_ids),
-            "associations": {eid: a.to_dict() for eid, a in self.associations.items()},
-            "avl_keys": self.avl.inorder(),
-            "clock": self.clock,
-            "W_hours": self.W_hours,
-            "R_km": self.R_km,
-            "L_depth": self.L_depth,
-            "T_archive_hours": self.T_archive_hours,
-            "total_events_created": self.total_events_created,
-            "total_reports_processed": self.total_reports_processed,
-            "total_corrections": self.total_corrections,
-            "total_archives": self.total_archives,
-            "total_reports_discarded": self.total_reports_discarded,
-            "total_conflicts": self.total_conflicts,
-            "total_confirmations": self.total_confirmations,
-            "stress_mode": self.avl.stress_mode,
+        """Full independent copy of the state, including the exact tree topology.
+
+        Same format as a saved scenario file (domain/storage.py), so later
+        changes to the scenario never alter a snapshot already taken.
+        """
+        return scenario_to_dict(self)
+
+    def _record(self, action_type: str, before: dict, description: str) -> None:
+        """Push one undoable action with the state it must return to."""
+        self.undo_stack.push({
+            "type": action_type, "before": before, "description": description,
         })
 
     def summary(self) -> dict:
@@ -207,10 +198,8 @@ class Scenario:
         self.event_index[event_id] = event
         self.total_events_created += 1
 
-        self.undo_stack.push({
-            "type": "CREATE", "before": before,
-            "description": f"Crear evento {event.format_id()} M={event.magnitude}",
-        })
+        self._record("CREATE", before,
+            f"Crear evento {event.format_id()} M={event.magnitude}")
 
         self.recalculate_all_associations()
         return event
@@ -250,10 +239,8 @@ class Scenario:
 
         self.total_corrections += 1
 
-        self.undo_stack.push({
-            "type": "CORRECT", "before": before,
-            "description": f"Corregir evento {event.format_id()} rev={event.revision}",
-        })
+        self._record("CORRECT", before,
+            f"Corregir evento {event.format_id()} rev={event.revision}")
 
         self.recalculate_all_associations()
         return event
@@ -278,10 +265,8 @@ class Scenario:
 
         self.recalculate_all_associations()
 
-        self.undo_stack.push({
-            "type": "DELETE", "before": before,
-            "description": f"Eliminar evento {event.format_id()}",
-        })
+        self._record("DELETE", before,
+            f"Eliminar evento {event.format_id()}")
         return event
 
     # --- Marcar revisado ---
@@ -292,10 +277,8 @@ class Scenario:
             raise ValueError(f"Evento {event_id} no encontrado entre los activos")
         before = self.snapshot()
         event.attention_state = AttentionState.REVIEWED
-        self.undo_stack.push({
-            "type": "REVIEW", "before": before,
-            "description": f"Marcar revisado {event.format_id()}",
-        })
+        self._record("REVIEW", before,
+            f"Marcar revisado {event.format_id()}")
         return event
 
     # --- Encolar y procesar reportes ---
@@ -417,11 +400,8 @@ class Scenario:
                 result = {"result": "REJECTED", "reason": str(e)}
 
         self.total_reports_processed += 1
-        self.undo_stack.push({
-            "type": "PROCESS_REPORT", "before": before,
-            "report": report.to_dict(),
-            "description": f"Procesar reporte {report.event_id} rev={report.revision} → {result['result']}",
-        })
+        self._record("PROCESS_REPORT", before,
+            f"Procesar reporte {report.event_id} rev={report.revision} → {result['result']}")
         return result
 
     # --- Asociaciones ---
@@ -526,10 +506,8 @@ class Scenario:
             self.archived[eid] = event
             count += 1
         self.total_archives += count
-        self.undo_stack.push({
-            "type": "ARCHIVE", "before": before,
-            "description": f"Archivar {count} eventos: {event_ids}",
-        })
+        self._record("ARCHIVE", before,
+            f"Archivar {count} eventos: {event_ids}")
         return count
 
     def archive_largest_eligible(self) -> dict:
@@ -547,70 +525,10 @@ class Scenario:
             return {"result": "EMPTY", "message": "No hay acciones para deshacer"}
 
         action = self.undo_stack.pop()
-        before = action["before"]
 
-        self.avl.__init__()
-        self.bst.__init__()
-        self.event_index.clear()
-        self.archived.clear()
-        self.deleted_ids = before["deleted_ids"]
-        self.clock = before["clock"]
-        self.W_hours = before["W_hours"]
-        self.R_km = before["R_km"]
-        self.L_depth = before["L_depth"]
-        self.T_archive_hours = before["T_archive_hours"]
-        self.total_events_created = before["total_events_created"]
-        self.total_reports_processed = before["total_reports_processed"]
-        self.total_corrections = before["total_corrections"]
-        self.total_archives = before["total_archives"]
-        self.total_reports_discarded = before.get("total_reports_discarded", 0)
-        self.total_conflicts = before.get("total_conflicts", 0)
-        self.total_confirmations = before.get("total_confirmations", 0)
-        self.avl.stress_mode = before["stress_mode"]
-
-        for eid, snap in before["event_index"].items():
-            event = SeismicEvent.__new__(SeismicEvent)
-            event.event_id = snap["event_id"]
-            event.magnitude = snap["magnitude"]
-            event.depth_km = snap["depth_km"]
-            event.epicenter = snap["epicenter"]
-            event.occurrence_time = snap["occurrence_time"]
-            event.revision = snap["revision"]
-            event.reporting_stations = snap["reporting_stations"]
-            event.priority = snap["priority"]
-            event.attention_state = snap["attention_state"]
-            event.status = snap["status"]
-            event.in_populated_zone = snap["in_populated_zone"]
-            event.reference_event_id = snap["reference_event_id"]
-            self.event_index[eid] = event
-            self.avl.insert(event)
-            self.bst.insert(event.build_key())
-
-        for eid, snap in before["archived"].items():
-            event = SeismicEvent.__new__(SeismicEvent)
-            event.event_id = snap["event_id"]
-            event.magnitude = snap["magnitude"]
-            event.depth_km = snap["depth_km"]
-            event.epicenter = snap["epicenter"]
-            event.occurrence_time = snap["occurrence_time"]
-            event.revision = snap["revision"]
-            event.reporting_stations = snap["reporting_stations"]
-            event.priority = snap["priority"]
-            event.attention_state = snap["attention_state"]
-            event.status = snap["status"]
-            event.in_populated_zone = snap["in_populated_zone"]
-            event.reference_event_id = snap["reference_event_id"]
-            self.archived[eid] = event
-
-        self.associations.clear()
-        for eid, a_dict in before["associations"].items():
-            self.associations[eid] = Association.from_dict(a_dict)
-
-        # Si la acción fue procesar un reporte, restaurarlo en la cola (Sección 13)
-        if action.get("type") == "PROCESS_REPORT" and "report" in action:
-            r_data = action["report"]
-            r_obj = Report.from_dict(r_data) if isinstance(r_data, dict) else r_data
-            self.report_queue.restore_at_front(r_obj)
+        # The snapshot already holds the queue in its original order, so undoing
+        # a queue step puts the report back even when that step discarded it.
+        apply_state(self, action["before"])
 
         return {
             "result": "UNDONE",
@@ -693,14 +611,65 @@ class Scenario:
     # --- Modo estrés ---
 
     def toggle_stress(self) -> dict:
+        before = self.snapshot()
         self.avl.stress_mode = not self.avl.stress_mode
+        mode = "estrés" if self.avl.stress_mode else "normal"
+        self._record("TOGGLE_STRESS", before, f"Cambiar a modo {mode}")
         return {"stress_mode": self.avl.stress_mode}
 
     def recover_balance(self) -> dict:
         if not self.avl.stress_mode:
             return {"result": "NOT_IN_STRESS", "message": "El árbol no está en modo estrés"}
+        before = self.snapshot()
         cost = self.avl.recover_balance()
+        self._record("RECOVER", before,
+                     f"Recuperación global: altura final {cost['final_height']}")
         return {"result": "RECOVERED", "cost": cost}
+
+    # --- Reloj y parámetros (Sections 3, 7, 9, 10) ---
+
+    def advance_clock(self, hours: float) -> datetime:
+        """Move the simulation clock forward; it never goes back (Section 3)."""
+        if not hours > 0:
+            raise ValueError(f"Las horas a avanzar deben ser positivas, se recibió {hours}")
+        before = self.snapshot()
+        self.clock += timedelta(hours=hours)
+        self._record("ADVANCE_CLOCK", before,
+                     f"Avanzar reloj {hours}h hasta {self.clock.isoformat()}")
+        return self.clock
+
+    def update_parameters(self, w_hours: Optional[float] = None,
+                          r_km: Optional[float] = None,
+                          l_depth: Optional[int] = None,
+                          t_archive_hours: Optional[float] = None) -> None:
+        """Change W, R, L and/or T as one action. Nothing changes if any value is invalid."""
+        errors = []
+        if w_hours is not None and not w_hours > 0:
+            errors.append(f"W debe ser positivo, se recibió {w_hours}")
+        if r_km is not None and not r_km > 0:
+            errors.append(f"R debe ser positivo, se recibió {r_km}")
+        if l_depth is not None and (int(l_depth) != l_depth or l_depth < 0):
+            errors.append(f"L debe ser un entero no negativo, se recibió {l_depth}")
+        if t_archive_hours is not None and not t_archive_hours > 0:
+            errors.append(f"T debe ser positivo, se recibió {t_archive_hours}")
+        if errors:
+            raise ValueError("; ".join(errors))
+
+        before = self.snapshot()
+        if w_hours is not None:
+            self.W_hours = float(w_hours)
+        if r_km is not None:
+            self.R_km = float(r_km)
+        if l_depth is not None:
+            self.L_depth = int(l_depth)
+        if t_archive_hours is not None:
+            self.T_archive_hours = float(t_archive_hours)
+
+        # A change of W or R can change associations (Section 7).
+        self.recalculate_all_associations()
+        self._record("PARAM_UPDATE", before,
+                     f"Actualizar parámetros W={self.W_hours}h R={self.R_km}km "
+                     f"L={self.L_depth} T={self.T_archive_hours}h")
 
     # ================================================================
     # Consultas y análisis del desempeño (Sección 11)

@@ -169,10 +169,12 @@ def mark_reviewed(event_id):
 
 @eel.expose
 def advance_clock(hours):
-    """Avanza el reloj de simulación."""
-    from datetime import timedelta
-    sc.clock += timedelta(hours=float(hours))
-    return {"ok": True, "clock": sc.clock.isoformat()}
+    """Avanza el reloj de simulación (acción que se puede deshacer)."""
+    try:
+        clock = sc.advance_clock(float(hours))
+        return {"ok": True, "clock": clock.isoformat()}
+    except Exception as e:
+        return {"ok": False, "message": str(e), "clock": sc.clock.isoformat()}
 
 
 @eel.expose
@@ -243,21 +245,12 @@ def compare_trees_view():
 def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=None):
     """Actualiza parámetros del escenario (W, R, L, T). Registra acción en undo."""
     try:
-        before = sc.snapshot()
-        if w_hours is not None:
-            sc.W_hours = float(w_hours)
-        if r_km is not None:
-            sc.R_km = float(r_km)
-        if l_depth is not None:
-            sc.L_depth = int(l_depth)
-        if t_archive_hours is not None:
-            sc.T_archive_hours = float(t_archive_hours)
-
-        sc.recalculate_all_associations()
-        sc.undo_stack.push({
-            "type": "PARAM_UPDATE", "before": before,
-            "description": f"Actualizar parámetros W={sc.W_hours}h R={sc.R_km}km L={sc.L_depth} T={sc.T_archive_hours}h",
-        })
+        sc.update_parameters(
+            w_hours=float(w_hours) if w_hours is not None else None,
+            r_km=float(r_km) if r_km is not None else None,
+            l_depth=float(l_depth) if l_depth is not None else None,
+            t_archive_hours=float(t_archive_hours) if t_archive_hours is not None else None,
+        )
         return {"ok": True, "message": "Parámetros actualizados exitosamente"}
     except Exception as e:
         return {"ok": False, "message": str(e)}

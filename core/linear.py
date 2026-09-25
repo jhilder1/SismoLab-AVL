@@ -58,9 +58,6 @@ class ReportQueue:
             raise IndexError("peek from empty ReportQueue")
         return self._queue[0]
 
-    def restore_at_front(self, report):
-        self._queue.appendleft(report)
-
     def is_empty(self) -> bool:
         return len(self._queue) == 0
 
