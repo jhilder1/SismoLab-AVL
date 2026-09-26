@@ -13,10 +13,14 @@ from datetime import datetime
 from domain.scenario import Scenario
 from domain.models import Epicenter, Report, Zone, Station
 from domain.storage import StateError
+from domain.versions import VersionStore
 
 # Carpeta donde abre el explorador de archivos (solo el punto de partida:
 # el usuario elige el archivo, no hay rutas de entrada fijas - Sección 12).
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+# Versiones con nombre: persisten en disco al cerrar el programa (Sección 13).
+versions = VersionStore(os.path.join(DATA_DIR, "versions"))
 
 # Estado global del simulador
 sc = Scenario()
@@ -325,6 +329,39 @@ def load_scenario():
 def load_insertions():
     """Carga por inserciones: misma secuencia en un AVL balanceado y un BST."""
     return _load("Cargar eventos por inserciones", sc.load_insertions_file)
+
+
+# =================================================================
+# Versiones con nombre (Sección 13)
+# =================================================================
+
+@eel.expose
+def list_versions():
+    """Lista las versiones guardadas, de la más antigua a la más reciente."""
+    return versions.list()
+
+
+@eel.expose
+def save_version(name):
+    """Guarda el estado actual con un nombre."""
+    try:
+        info = sc.save_version(versions, name)
+        return {"ok": True, "message": f"Versión '{info['name']}' guardada"}
+    except (ValueError, OSError) as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def restore_version(version_id):
+    """Restaura una versión (acción que se puede deshacer)."""
+    try:
+        info = sc.restore_version(versions, version_id)
+        return {"ok": True, "message": f"Versión '{info['name']}' restaurada "
+                                       f"({info['active']} activos, modo {info['mode']})"}
+    except StateError as e:
+        return {"ok": False,
+                "message": "La versión no se pudo restaurar. El escenario actual no cambió.",
+                "problems": e.problems}
 
 
 # =================================================================

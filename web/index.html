@@ -139,6 +139,18 @@
                 <button onclick="loadInsertions()" class="btn btn-info full-w">Cargar por inserciones</button>
                 <div id="file-result" class="result-box hidden"></div>
             </section>
+
+            <!-- Versiones con nombre (Sección 13) -->
+            <section class="card">
+                <h3>Versiones</h3>
+                <div class="form-row">
+                    <input type="text" id="version-name" placeholder="Nombre de la versión" maxlength="60">
+                    <button onclick="saveVersion()" class="btn btn-primary">Guardar</button>
+                </div>
+                <div id="versions-list" class="versions-list">
+                    <p class="muted">Sin versiones guardadas.</p>
+                </div>
+            </section>
         </aside>
 
         <!-- CENTER: Tree Visualization -->

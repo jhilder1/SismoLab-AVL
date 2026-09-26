@@ -391,6 +391,55 @@ async function loadInsertions() {
 }
 
 // =====================================================
+// Versiones con nombre (Seccion 13)
+// =====================================================
+
+async function refreshVersions() {
+    const list = await eel.list_versions()();
+    const box = $("versions-list");
+    if (!list.length) {
+        box.innerHTML = '<p class="muted">Sin versiones guardadas.</p>';
+        return;
+    }
+    // Mas reciente arriba.
+    box.innerHTML = list.slice().reverse().map(v => {
+        if (!v.valid) {
+            return `<div class="version-item invalid" title="${esc(v.error)}">
+                <div><div class="v-name">${esc(v.name)}</div>
+                <div class="v-detail">Archivo danado: no se puede restaurar</div></div></div>`;
+        }
+        const saved = v.saved_at.replace("T", " ").replace("Z", " UTC");
+        const mode = v.mode === "stress" ? " | estres" : "";
+        return `<div class="version-item">
+            <div><div class="v-name">${esc(v.name)}</div>
+            <div class="v-detail">Guardada ${esc(saved)}</div>
+            <div class="v-detail">Reloj ${esc(v.clock.replace("T", " ").replace("Z", ""))} | ${v.active} activos, ${v.archived} hist.${mode}</div></div>
+            <button class="btn btn-sm" onclick="restoreVersion('${esc(v.id)}')">Restaurar</button>
+        </div>`;
+    }).join("");
+}
+
+async function saveVersion() {
+    const res = await eel.save_version(val("version-name"))();
+    log(res.message, res.ok ? "ok" : "err");
+    if (res.ok) {
+        $("version-name").value = "";
+        refreshVersions();
+    }
+}
+
+async function restoreVersion(id) {
+    const res = await eel.restore_version(id)();
+    log(res.message, res.ok ? "ok" : "err");
+    if (!res.ok) {
+        showProblems({ file: "Version", problems: res.problems });
+        return;
+    }
+    showTree("avl");
+    refresh();
+}
+
+// =====================================================
 // Init: cargar estaciones y estado inicial
 // =====================================================
 
@@ -406,6 +455,7 @@ async function init() {
     $("rp-time").value = now;
 
     refresh();
+    refreshVersions();
 }
 
 // Arrancar cuando la pagina cargue

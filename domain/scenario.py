@@ -695,8 +695,26 @@ class Scenario:
                             f"desde {os.path.basename(path)}")
         return comparison
 
+    # --- Named versions (Section 13) ---
+
+    def save_version(self, store, name: str) -> dict:
+        """Store the current operational state under a name. Not an action:
+        the scenario does not change, so there is nothing to undo."""
+        return store.save(name, self.snapshot())
+
+    def restore_version(self, store, version_id: str) -> dict:
+        """Replace the state with a saved version as one undoable action.
+
+        The stored state is validated like a topology file, so an edited or
+        damaged version raises StateError and the scenario stays untouched.
+        """
+        name, stored = store.load_state(version_id)
+        state, info = load_topology(self, stored)
+        self._replace_state(state, "RESTORE_VERSION", f"Restaurar versión '{name}'")
+        return {"name": name, **info}
+
     def _replace_state(self, state: dict, action_type: str, description: str) -> None:
-        """A load is one undoable action (Section 13)."""
+        """A load or a version restore is one undoable action (Section 13)."""
         before = self.snapshot()
         apply_state(self, state)
         self._record(action_type, before, description)

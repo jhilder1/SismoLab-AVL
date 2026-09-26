@@ -311,6 +311,17 @@ input[type="datetime-local"] { font-size: 0.75rem; }
 .result-box .ok { color: var(--green); }
 .result-box .err { color: var(--red); }
 
+/* --- Versions --- */
+.versions-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.version-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--bg); border-radius: 6px; padding: 6px 8px; font-size: 0.72rem;
+}
+.version-item .v-name { color: var(--text); font-weight: 600; }
+.version-item .v-detail { color: var(--text2); }
+.version-item.invalid .v-name { color: var(--red); }
+.versions-list .muted { padding: 8px 0; }
+
 /* --- Tree tabs (AVL / BST) --- */
 .tree-tabs { display: flex; gap: 6px; }
 .btn.tab.active { color: var(--text); border-color: var(--accent); background: var(--bg); }
