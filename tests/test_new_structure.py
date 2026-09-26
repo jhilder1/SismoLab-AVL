@@ -332,6 +332,16 @@ def test_queries_section_11():
 # =====================================================================
 
 
+def load_tests(loader, standard_tests, pattern):
+    """Register the plain test_* functions so `python -m unittest discover` runs them."""
+    import unittest
+    suite = unittest.TestSuite()
+    for name, func in sorted(globals().items()):
+        if name.startswith("test_") and callable(func):
+            suite.addTest(unittest.FunctionTestCase(func, description=name))
+    return suite
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

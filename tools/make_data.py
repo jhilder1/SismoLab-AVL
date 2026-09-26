@@ -20,8 +20,7 @@ from domain.models import Epicenter, Report, SeismicEvent, Zone, parse_time  # n
 from domain.scenario import Scenario  # noqa: E402
 from domain.storage import FORMAT_INSERTIONS, write_json_file  # noqa: E402
 
-INSERTIONS = os.path.join(ROOT, "data", "insertions")
-TOPOLOGIES = os.path.join(ROOT, "data", "topologies")
+DATA_DIR = os.path.join(ROOT, "data")
 
 CLOCK = "2026-09-12T00:00:00Z"
 
@@ -84,30 +83,41 @@ def key_of(entry):
     return ev.build_key().to_tuple()
 
 
-def save(folder, name, data):
+def save(folder, name, data, verbose=True):
     os.makedirs(folder, exist_ok=True)
     write_json_file(os.path.join(folder, name), data)
-    print("  ", os.path.relpath(os.path.join(folder, name), ROOT))
+    if verbose:
+        print("  ", os.path.join(os.path.basename(folder), name))
 
 
 def node_of(data, event_id):
     return next(n for n in data["active_tree"]["nodes"] if n["event_id"] == event_id)
 
 
-def main():
-    print("Insertion files:")
+def main(out_dir=DATA_DIR, verbose=True):
+    """Write every test file under out_dir (tests regenerate into a temp folder
+    and compare byte by byte with data/ to prove the files are reproducible)."""
+    INSERTIONS = os.path.join(out_dir, "insertions")
+    TOPOLOGIES = os.path.join(out_dir, "topologies")
+
+    def put(folder, name, data):
+        save(folder, name, data, verbose)
+
+    if verbose:
+        print("Insertion files:")
     ascending = sorted(EVENTS, key=key_of)
     mixed = EVENTS[:]
     random.Random(16).shuffle(mixed)
-    save(INSERTIONS, "ascendente.json", insertion_file(
+    put(INSERTIONS, "ascendente.json", insertion_file(
         ascending, "Same events sorted by ascending key K: the BST degenerates into a list"))
-    save(INSERTIONS, "mezclado.json", insertion_file(
+    put(INSERTIONS, "mezclado.json", insertion_file(
         mixed, "Same events in a fixed mixed order"))
     repeated = mixed + [dict(mixed[3], magnitude=2.0)]
-    save(INSERTIONS, "invalido-id-repetido.json", insertion_file(
+    put(INSERTIONS, "invalido-id-repetido.json", insertion_file(
         repeated, f"Id {mixed[3]['event_id']} appears twice: the whole file must be rejected"))
 
-    print("Topology files:")
+    if verbose:
+        print("Topology files:")
     # normal: balanced tree with history, deleted id, reviewed event and queue.
     sc = Scenario()
     sc.load_insertions_file(os.path.join(INSERTIONS, "mezclado.json"))
@@ -120,7 +130,7 @@ def main():
     sc.enqueue_report(Report(190, 1, "EST-001", 5.0, 10.0, Epicenter(250, 250),
                              parse_time("2026-09-11T09:00:00Z")))  # new event
     normal = sc.snapshot()
-    save(TOPOLOGIES, "normal.json", normal)
+    put(TOPOLOGIES, "normal.json", normal)
 
     # stress: ascending insertions with rotations postponed (|bf| > 2).
     sc = Scenario()
@@ -130,11 +140,11 @@ def main():
         sc.create_event(i, magnitude, 10.0, 450, 650,
                         parse_time("2026-09-11T00:00:00Z"), "EST-001")
     stress = sc.snapshot()
-    save(TOPOLOGIES, "estres.json", stress)
+    put(TOPOLOGIES, "estres.json", stress)
 
     unbalanced_normal = copy.deepcopy(stress)
     unbalanced_normal["mode"] = "normal"
-    save(TOPOLOGIES, "desbalanceado-modo-normal.json", unbalanced_normal)
+    put(TOPOLOGIES, "desbalanceado-modo-normal.json", unbalanced_normal)
 
     # Wrong global order only: the leftmost node (smallest key) gets the largest
     # key, so it sits on the wrong side of every ancestor. Its stored key and
@@ -147,7 +157,7 @@ def main():
     node["event"]["priority"] = 3
     node["key"] = [3, 9.9, node["event_id"]]
     del broken_order["bst"]  # rebuilt from the AVL, so only the order problem shows
-    save(TOPOLOGIES, "inconsistente-orden.json", broken_order)
+    put(TOPOLOGIES, "inconsistente-orden.json", broken_order)
 
     # Wrong metadata: a height, a balance factor and a stored priority.
     broken_meta = copy.deepcopy(normal)
@@ -160,7 +170,7 @@ def main():
                  if n["event_id"] not in (root_id, leaf["event_id"]))
     other["event"]["priority"] = 1 if other["event"]["priority"] != 1 else 2
     other["key"][0] = other["event"]["priority"]
-    save(TOPOLOGIES, "inconsistente-metadatos.json", broken_meta)
+    put(TOPOLOGIES, "inconsistente-metadatos.json", broken_meta)
 
     # Invalid references: a link to a missing id and a node with two parents.
     broken_links = copy.deepcopy(normal)
@@ -168,7 +178,7 @@ def main():
     leaves = [n for n in nodes if n["left"] is None and n["right"] is None]
     leaves[0]["left"] = 999999
     leaves[1]["right"] = broken_links["active_tree"]["root"]
-    save(TOPOLOGIES, "invalido-referencias.json", broken_links)
+    put(TOPOLOGIES, "invalido-referencias.json", broken_links)
 
 
 if __name__ == "__main__":

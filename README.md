@@ -1,52 +1,109 @@
 # 🏔️ SismoLab AVL
 
-Simulated seismic observatory management application.
-Core data structure: **AVL Tree** of active seismic events ordered by key **K = (Priority, Magnitude, ID)**.
+Aplicación de escritorio para gestionar un observatorio sísmico simulado.
+El catálogo de eventos activos es un **árbol AVL de implementación propia**,
+ordenado por la clave **K = (P, M, I)**: prioridad, magnitud e identificador.
 
-## Architecture
+## Requisitos
 
-- **Backend**: Python 3.11+ / FastAPI (business logic, REST API)
-- **Frontend**: React 18 / Vite (UI, D3.js tree visualization)
-- **Pattern**: MVC with strict GUI/business separation
+- **Python 3.12** (probado con 3.12.10).
+- **Eel** para la ventana: `pip install -r requirements.txt`
+- **Microsoft Edge** (viene con Windows) o Chrome para mostrar la interfaz.
 
-## Project Structure
+`tkinter` (explorador de archivos), `json` y `unittest` vienen con Python.
+
+## Ejecutar
 
 ```
-SismoLab-AVL/
-├── backend/           # Python backend (FastAPI)
-│   ├── models/        # Domain entities
-│   ├── structures/    # AVL, BST, Stack, Queue (own implementation)
-│   ├── services/      # Business logic orchestration
-│   ├── api/           # REST controllers (routers)
-│   ├── schemas/       # Pydantic DTOs
-│   └── tests/         # Automated tests
-├── frontend/          # React frontend (Vite)
-├── data/              # JSON test data files
-└── docs/              # Documentation
-```
-
-## Quick Start
-
-### Backend
-```bash
-cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+python main.py
 ```
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
+Se abre una ventana con la interfaz. Cerrar la ventana detiene el programa.
+
+## Pruebas
+
+Todas las pruebas con un solo comando:
+
+```
+python -m unittest discover -s tests -v
 ```
 
-## Team
+| Archivo | Qué prueba |
+|---|---|
+| `tests/test_new_structure.py` | AVL, BST, pila, cola, operaciones básicas del escenario |
+| `tests/test_storage.py` | Foto completa del estado y reconstrucción con la topología exacta |
+| `tests/test_undo.py` | Deshacer cada acción devuelve el estado exacto anterior (sección 13) |
+| `tests/test_loading.py` | Guardado, carga por topología y por inserciones, validaciones (sección 12) |
+| `tests/test_versions.py` | Versiones con nombre que persisten al cerrar el programa (sección 13) |
+| `tests/test_section16_persistence.py` | Caso "Persistencia y consistencia" de la sección 16, paso a paso, y reproducibilidad de `data/` |
 
-- Integrante A — Data Structures (AVL, BST, recovery)
-- Integrante B — Backend (services, persistence, API)
-- Integrante C — Frontend (React, D3.js, UI)
+## Arquitectura
 
-## License
+Tres capas; las dependencias solo van hacia abajo (`web → main.py → domain → core`).
+La interfaz nunca toca un nodo: pide la operación a `Scenario` y dibuja el resultado.
 
-Academic project — Universidad
+```
+main.py                 Puente Eel: cada botón llama una función @eel.expose;
+                        explorador de archivos (tkinter)
+web/                    Interfaz HTML + JS + SVG (árbol AVL y BST comparativo)
+domain/
+  models.py             Evento, reporte, zona, estación, epicentro, asociación;
+                        cálculo de prioridad y formato de fechas ISO 8601 (Z)
+  scenario.py           Estado completo y un método por acción; pila de deshacer
+  storage.py            Estado <-> JSON con topología exacta (todo o nada)
+  loader.py             Carga por topología y por inserciones (sección 12)
+  validation.py         Validaciones de datos, orden global por K, alturas y balance
+  versions.py           Versiones con nombre en data/versions/ (sección 13)
+core/
+  avl_tree.py           TreeKey, AVLTree (rotaciones, modo estrés, recuperación), BSTTree
+  linear.py             Pila de deshacer y cola FIFO de reportes
+tools/make_data.py      Regenera los archivos de prueba de data/
+```
+
+## Persistencia
+
+- **Guardar escenario:** un JSON con la topología real del AVL y del BST (raíz y
+  enlaces izquierdo/derecho por identificador), alturas, factores de balance,
+  datos vigentes, histórico, identificadores eliminados, asociaciones, cola en
+  su orden, reloj, zonas, estaciones, parámetros W, R, L y T, modo y métricas.
+- **Cargar escenario (topología):** reconstruye los enlaces sin reinsertar. Antes
+  de sustituir el escenario valida datos, unicidad, referencias, ciclos, orden
+  global, alturas, factores y prioridades. Si algo falla muestra todos los
+  problemas y conserva el escenario actual.
+- **Cargar por inserciones:** inserta la secuencia en un AVL balanceado y en un
+  BST y compara raíz, altura, hojas y comparaciones de búsqueda.
+- **Versiones:** se guardan en `data/versions/` (no se suben al repositorio) y
+  se restauran como una acción que se puede deshacer.
+
+## Archivos de prueba (`data/`)
+
+Se generan con `python tools/make_data.py`; una prueba comprueba que al
+regenerarlos se obtiene el mismo contenido.
+
+| Archivo | Resultado esperado |
+|---|---|
+| `insertions/ascendente.json` | 16 eventos en orden ascendente de K: BST de altura 15 frente a AVL de altura 4 |
+| `insertions/mezclado.json` | Los mismos 16 eventos en otro orden: mismo contenido, otro BST |
+| `insertions/invalido-id-repetido.json` | Rechazado: un identificador repetido invalida el archivo |
+| `topologies/normal.json` | Carga en modo normal: árbol balanceado, histórico, un eliminado y 2 reportes en cola |
+| `topologies/estres.json` | Carga en modo estrés, desbalanceado (factores hasta -6) |
+| `topologies/desbalanceado-modo-normal.json` | Rechazado en modo normal; se carga si el modo estrés está activo |
+| `topologies/inconsistente-orden.json` | Rechazado: orden global por K roto |
+| `topologies/inconsistente-metadatos.json` | Rechazado: altura, factor de balance y prioridad guardados no coinciden |
+| `topologies/invalido-referencias.json` | Rechazado: enlace a un identificador inexistente y nodo en dos posiciones |
+
+Los 16 eventos incluyen los casos límite de la sección 16: M = 4.5 con H = 30.0
+en zona poblada (prioridad 3) y fuera de ella (prioridad 2), M = 6.0, un
+epicentro en el borde de dos zonas y empates de prioridad y magnitud resueltos
+por identificador.
+
+## Equipo
+
+- Integrante A — Estructuras de datos (AVL, BST, recuperación)
+- Integrante B — Backend (servicios, persistencia, API)
+- Integrante C — Frontend (interfaz, visualización)
+
+## Licencia
+
+Proyecto académico — Universidad
