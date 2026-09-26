@@ -7,10 +7,16 @@ Todas las funciones expuestas con @eel.expose se llaman
 directamente desde JavaScript: eel.nombre_funcion(args)
 """
 
+import os
 import eel
 from datetime import datetime
 from domain.scenario import Scenario
 from domain.models import Epicenter, Report, Zone, Station
+from domain.storage import StateError
+
+# Carpeta donde abre el explorador de archivos (solo el punto de partida:
+# el usuario elige el archivo, no hay rutas de entrada fijas - Sección 12).
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 # Estado global del simulador
 sc = Scenario()
@@ -255,6 +261,70 @@ def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=Non
     except Exception as e:
         return {"ok": False, "message": str(e)}
 
+
+
+# =================================================================
+# Persistencia (Sección 12): explorador de archivos + carga/guardado
+# =================================================================
+
+def _ask_path(title, save=False):
+    """Abre el explorador de archivos nativo y devuelve la ruta elegida (o None)."""
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)  # que el diálogo quede encima de la ventana
+    try:
+        options = {"parent": root, "title": title, "initialdir": DATA_DIR,
+                   "filetypes": [("JSON", "*.json"), ("Todos", "*.*")]}
+        if save:
+            path = filedialog.asksaveasfilename(defaultextension=".json", **options)
+        else:
+            path = filedialog.askopenfilename(**options)
+    finally:
+        root.destroy()
+    return path or None
+
+
+def _load(title, load_method):
+    path = _ask_path(title)
+    if not path:
+        return {"ok": False, "cancelled": True, "message": "Carga cancelada"}
+    try:
+        info = load_method(path)
+        return {"ok": True, "file": os.path.basename(path), "info": info}
+    except StateError as e:
+        return {"ok": False, "file": os.path.basename(path),
+                "message": f"Archivo rechazado: {len(e.problems)} problema(s). "
+                           f"El escenario actual no cambió.",
+                "problems": e.problems}
+
+
+@eel.expose
+def save_scenario():
+    """Guarda el escenario completo (topología incluida) en un JSON."""
+    path = _ask_path("Guardar escenario", save=True)
+    if not path:
+        return {"ok": False, "cancelled": True, "message": "Guardado cancelado"}
+    try:
+        info = sc.save_to_file(path)
+        return {"ok": True, "message": f"Escenario guardado en {os.path.basename(path)} "
+                                       f"({info['active']} activos, {info['archived']} en histórico)"}
+    except OSError as e:
+        return {"ok": False, "message": f"No se pudo guardar: {e}"}
+
+
+@eel.expose
+def load_scenario():
+    """Carga por topología: reconstruye el árbol exacto del archivo."""
+    return _load("Cargar escenario (topología)", sc.load_scenario_file)
+
+
+@eel.expose
+def load_insertions():
+    """Carga por inserciones: misma secuencia en un AVL balanceado y un BST."""
+    return _load("Cargar eventos por inserciones", sc.load_insertions_file)
 
 
 # =================================================================

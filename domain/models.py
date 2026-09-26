@@ -34,6 +34,16 @@ def parse_time(text: str) -> datetime:
     return moment.replace(microsecond=0)
 
 
+def has_max_one_decimal(value: float) -> bool:
+    """Section 3: magnitudes, depths and coordinates carry at most one decimal.
+
+    Compares in tenths with a tiny tolerance, so 4.5 passes (stored as
+    4.4999...) and 4.46 fails instead of being rounded silently.
+    """
+    tenths = value * 10
+    return abs(tenths - round(tenths)) < 1e-9
+
+
 # =====================================================================
 # Enumeraciones
 # =====================================================================
@@ -354,7 +364,7 @@ class SeismicEvent:
         event.depth_km = round(data["depth_km"], 1)
         event.epicenter = Epicenter.from_dict(data["epicenter"])
         event.occurrence_time = parse_time(data["occurrence_time"])
-        event.revision = data["revision"]
+        event.revision = data.get("revision", 1)
         event.reporting_stations = set(data.get("reporting_stations", []))
         event.attention_state = AttentionState(data.get("attention_state", "pending"))
         event.status = EventStatus(data.get("status", "active"))
@@ -372,14 +382,14 @@ class SeismicEvent:
         errors: list[str] = []
         if not (1 <= event_id <= 999999):
             errors.append(f"event_id must be between 1 and 999999, got {event_id}")
-        if not (-2.0 <= magnitude <= 10.0):
-            errors.append(f"magnitude must be between -2.0 and 10.0, got {magnitude}")
-        if not (0.0 <= depth_km <= 700.0):
-            errors.append(f"depth_km must be between 0.0 and 700.0, got {depth_km}")
-        if not (0.0 <= epicenter_x <= 1000.0):
-            errors.append(f"epicenter.x must be between 0.0 and 1000.0, got {epicenter_x}")
-        if not (0.0 <= epicenter_y <= 1000.0):
-            errors.append(f"epicenter.y must be between 0.0 and 1000.0, got {epicenter_y}")
+        for name, value, low, high in (("magnitude", magnitude, -2.0, 10.0),
+                                       ("depth_km", depth_km, 0.0, 700.0),
+                                       ("epicenter.x", epicenter_x, 0.0, 1000.0),
+                                       ("epicenter.y", epicenter_y, 0.0, 1000.0)):
+            if not (math.isfinite(value) and low <= value <= high):
+                errors.append(f"{name} must be between {low} and {high}, got {value}")
+            elif not has_max_one_decimal(value):
+                errors.append(f"{name} must have at most one decimal, got {value}")
         if occurrence_time > simulation_clock:
             errors.append(f"occurrence_time ({occurrence_time.isoformat()}) cannot be "
                           f"after simulation clock ({simulation_clock.isoformat()})")

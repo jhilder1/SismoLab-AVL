@@ -11,6 +11,17 @@ function log(msg, type) {
 
 function val(id) { return $(id).value; }
 
+// Escapa texto antes de meterlo en innerHTML (mensajes que vienen de archivos).
+function esc(text) {
+    return String(text).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+}
+
+// Ultimo estado recibido y arbol que se esta mostrando ("avl" o "bst").
+let lastState = null;
+let treeView = "avl";
+
 // =====================================================
 // Refresh: trae el estado y actualiza toda la pantalla
 // =====================================================
@@ -18,12 +29,12 @@ function val(id) { return $(id).value; }
 async function refresh() {
     try {
         const state = await eel.get_state()();
+        lastState = state;
         updateStats(state);
-        updateTree(state.tree);
+        drawCurrentTree();
         updateEvents(state.events);
         updateStress(state.stress_mode);
         $("clock").textContent = state.clock.replace("T", " ");
-        $("tree-root").textContent = "Raiz: " + (state.tree.root || "--");
     } catch (e) {
         log("Error al conectar con Python: " + e, "err");
     }
@@ -84,6 +95,25 @@ function updateEvents(events) {
 }
 
 // =====================================================
+// AVL / BST tabs
+// =====================================================
+
+function showTree(view) {
+    treeView = view;
+    $("tab-avl").classList.toggle("active", view === "avl");
+    $("tab-bst").classList.toggle("active", view === "bst");
+    drawCurrentTree();
+}
+
+function drawCurrentTree() {
+    if (!lastState) return;
+    const data = treeView === "bst" ? lastState.bst : lastState.tree;
+    const label = treeView === "bst" ? "BST" : "AVL";
+    updateTree(data);
+    $("tree-root").textContent = `${label} | Raiz: ${data.root || "--"} | Altura: ${data.height} | Hojas: ${data.leaves}`;
+}
+
+// =====================================================
 // Draw AVL Tree (SVG)
 // =====================================================
 
@@ -110,32 +140,29 @@ function updateTree(treeData) {
     const edges = [];
     let minX = Infinity, maxX = -Infinity, maxY = 0;
 
-    function layout(node, depth, left, right) {
-        if (!node) return;
-        const x = (left + right) / 2;
+    // X = posicion del nodo en el recorrido inorden (columna k para el k-esimo
+    // nodo), Y = profundidad. El ancho crece con la cantidad de nodos y no con
+    // 2^altura, asi que un BST degenerado (una "escalera") tambien se ve.
+    let column = 0;
+    function layout(node, depth) {
+        if (!node) return null;
+        const left = layout(node.left, depth + 1);
+        const x = column * (NODE_R * 2 + H_GAP);
+        column++;
         const y = depth * V_GAP + NODE_R + 10;
+        const right = layout(node.right, depth + 1);
+
         positions.push({ x, y, node });
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y > maxY) maxY = y;
-
-        if (node.left) {
-            const cx = (left + x) / 2;
-            const cy = (depth + 1) * V_GAP + NODE_R + 10;
-            edges.push({ x1: x, y1: y, x2: cx, y2: cy });
-            layout(node.left, depth + 1, left, x);
+        for (const child of [left, right]) {
+            if (child) edges.push({ x1: x, y1: y, x2: child.x, y2: child.y });
         }
-        if (node.right) {
-            const cx = (x + right) / 2;
-            const cy = (depth + 1) * V_GAP + NODE_R + 10;
-            edges.push({ x1: x, y1: y, x2: cx, y2: cy });
-            layout(node.right, depth + 1, x, right);
-        }
+        return { x, y };
     }
 
-    // El ancho depende de cuantos nodos hay
-    const treeWidth = Math.max(600, Math.pow(2, treeData.height + 1) * (NODE_R + H_GAP));
-    layout(treeData.nodes, 0, 0, treeWidth);
+    layout(treeData.nodes, 0);
 
     const svgW = maxX - minX + NODE_R * 4;
     const svgH = maxY + NODE_R * 2 + 10;
@@ -164,10 +191,11 @@ function updateTree(treeData) {
         else if (n.priority === 2) fill = "#ef6c00";
         else if (n.priority === 1) fill = "#2e7d32";
 
-        // Highlight unbalanced
+        // Highlight unbalanced (el BST no guarda factor de balance)
+        const hasBf = typeof n.bf === "number";
         let stroke = "none";
         let strokeW = 0;
-        if (Math.abs(n.bf) > 1) {
+        if (hasBf && Math.abs(n.bf) > 1) {
             stroke = "#ff1744";
             strokeW = 3;
         }
@@ -177,8 +205,10 @@ function updateTree(treeData) {
         html += `<text class="node-sublabel" x="${cx}" y="${cy + 13}">M${n.magnitude}</text>`;
 
         // Balance factor above node
-        const bfColor = Math.abs(n.bf) > 1 ? "#ff1744" : "var(--yellow)";
-        html += `<text class="node-bf" x="${cx}" y="${cy - NODE_R - 4}" fill="${bfColor}">${n.bf}</text>`;
+        if (hasBf) {
+            const bfColor = Math.abs(n.bf) > 1 ? "#ff1744" : "var(--yellow)";
+            html += `<text class="node-bf" x="${cx}" y="${cy - NODE_R - 4}" fill="${bfColor}">${n.bf}</text>`;
+        }
     }
 
     svg.innerHTML = html;
@@ -295,6 +325,68 @@ async function archiveEligible() {
     } else {
         log(res.message || "No hay ramas elegibles para archivar", "info");
     }
+    refresh();
+}
+
+// =====================================================
+// Archivo: guardar y cargar (Seccion 12)
+// =====================================================
+
+function showFileResult(html) {
+    const box = $("file-result");
+    box.innerHTML = html;
+    box.classList.remove("hidden");
+}
+
+function showProblems(res) {
+    const items = (res.problems || []).map(p => `<li>${esc(p)}</li>`).join("");
+    showFileResult(`<b class="err">${esc(res.file || "")}: rechazado</b>
+        <div>El escenario actual se conserva sin cambios.</div><ul>${items}</ul>`);
+}
+
+async function saveScenario() {
+    const res = await eel.save_scenario()();
+    log(res.message, res.ok ? "ok" : (res.cancelled ? "info" : "err"));
+}
+
+async function loadScenario() {
+    const res = await eel.load_scenario()();
+    if (res.cancelled) { log(res.message, "info"); return; }
+    if (!res.ok) { log(res.message, "err"); showProblems(res); return; }
+
+    const i = res.info;
+    const modeText = i.balanced
+        ? `modo ${i.mode === "stress" ? "estres" : "normal"}, arbol balanceado`
+        : `<b class="err">modo estres: topologia desbalanceada</b>`;
+    const bad = i.unbalanced_nodes.map(n => `ID ${n.event_id} (FB ${n.balance_factor})`).join(", ");
+    showFileResult(`<b class="ok">${esc(res.file)} cargado</b><br>
+        ${i.active} activos, ${i.archived} en historico | raiz ID ${i.root ?? "--"} | altura ${i.height}<br>
+        ${modeText}${bad ? "<br>Nodos desbalanceados: " + esc(bad) : ""}`);
+    log(`Escenario ${res.file} cargado (${i.mode})`, i.balanced ? "ok" : "info");
+    showTree("avl");
+    refresh();
+}
+
+async function loadInsertions() {
+    const res = await eel.load_insertions()();
+    if (res.cancelled) { log(res.message, "info"); return; }
+    if (!res.ok) { log(res.message, "err"); showProblems(res); return; }
+
+    const c = res.info;
+    const row = (label, key) => `<tr><td>${label}</td><td>${esc(c.avl[key] ?? "--")}</td><td>${esc(c.bst[key] ?? "--")}</td></tr>`;
+    const r = c.rotations;
+    showFileResult(`<b class="ok">${esc(res.file)}: ${c.events} eventos insertados en el mismo orden</b>
+        <table>
+            <tr><th></th><th>AVL</th><th>BST</th></tr>
+            ${row("Raiz", "root")}
+            ${row("Altura", "height")}
+            ${row("Prof. maxima", "max_depth")}
+            ${row("Hojas", "leaves")}
+            ${row("Comparaciones (buscar todas)", "total_comparisons")}
+            ${row("Peor busqueda", "max_comparisons")}
+        </table>
+        Rotaciones AVL: LL=${r.ll} RR=${r.rr} LR=${r.lr} RL=${r.rl} | giros izq=${r.simple_left} der=${r.simple_right}`);
+    log(`${c.events} eventos cargados por insercion. Usa las pestanas AVL / BST para comparar.`, "ok");
     refresh();
 }
 

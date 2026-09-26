@@ -304,6 +304,16 @@ input[type="datetime-local"] { font-size: 0.75rem; }
     margin-top: 4px;
 }
 .result-box.hidden { display: none; }
+.result-box ul { margin: 4px 0 0 16px; padding: 0; max-height: 180px; overflow-y: auto; }
+.result-box li { margin-bottom: 2px; }
+.result-box table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.result-box th, .result-box td { text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.result-box .ok { color: var(--green); }
+.result-box .err { color: var(--red); }
+
+/* --- Tree tabs (AVL / BST) --- */
+.tree-tabs { display: flex; gap: 6px; }
+.btn.tab.active { color: var(--text); border-color: var(--accent); background: var(--bg); }
 
 /* --- Log Bar --- */
 

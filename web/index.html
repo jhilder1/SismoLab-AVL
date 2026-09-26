@@ -130,12 +130,24 @@
                     <button onclick="archiveEligible()" class="btn btn-sm full-w">Archivar Elegibles</button>
                 </div>
             </section>
+
+            <!-- Archivo (Sección 12) -->
+            <section class="card">
+                <h3>Archivo</h3>
+                <button onclick="saveScenario()" class="btn btn-primary full-w">Guardar escenario</button>
+                <button onclick="loadScenario()" class="btn btn-info full-w">Cargar escenario (topología)</button>
+                <button onclick="loadInsertions()" class="btn btn-info full-w">Cargar por inserciones</button>
+                <div id="file-result" class="result-box hidden"></div>
+            </section>
         </aside>
 
         <!-- CENTER: Tree Visualization -->
         <main id="tree-area" class="tree-area">
             <div class="tree-header">
-                <h2>Arbol AVL</h2>
+                <div class="tree-tabs">
+                    <button id="tab-avl" onclick="showTree('avl')" class="btn btn-sm tab active">Arbol AVL</button>
+                    <button id="tab-bst" onclick="showTree('bst')" class="btn btn-sm tab">BST comparativo</button>
+                </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
             <div id="tree-container" class="tree-container">

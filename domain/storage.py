@@ -20,6 +20,9 @@ The undo stack is not part of the state: Section 13 says versions do not need it
 
 from __future__ import annotations
 
+import json
+import os
+
 from core.avl_tree import AVLNode, AVLTree, BSTNode, BSTTree, TreeKey
 from core.linear import ReportQueue
 from domain.models import (
@@ -28,6 +31,10 @@ from domain.models import (
 )
 
 SCHEMA_VERSION = 1
+
+# "format" tells the two load modes of Section 12 apart.
+FORMAT_SCENARIO = "sismolab-scenario"      # full state with explicit topology
+FORMAT_INSERTIONS = "sismolab-insertions"  # plain sequence of events
 
 # Scenario counters saved under "metrics" (attribute name -> JSON name).
 _SCENARIO_METRICS = {
@@ -60,12 +67,39 @@ class StateError(ValueError):
 
 
 # =====================================================================
+# JSON files
+# =====================================================================
+
+def read_json_file(path: str) -> dict:
+    """Read a JSON object; unreadable or malformed files raise StateError."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except OSError as exc:
+        raise StateError([f"Cannot read {path}: {exc.strerror}"]) from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise StateError([f"{os.path.basename(path)} is not valid JSON: {exc}"]) from exc
+    if not isinstance(data, dict):
+        raise StateError(["The JSON file must contain an object at the top level"])
+    return data
+
+
+def write_json_file(path: str, data: dict) -> None:
+    """Write through a temporary file so a failed save never leaves half a file."""
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, ensure_ascii=False, indent=2)
+    os.replace(temporary, path)
+
+
+# =====================================================================
 # Scenario -> dict
 # =====================================================================
 
 def scenario_to_dict(sc) -> dict:
     """Capture the whole operational state of the scenario (Section 12 list)."""
     return {
+        "format": FORMAT_SCENARIO,
         "schema_version": SCHEMA_VERSION,
         "clock": format_time(sc.clock),
         "mode": "stress" if sc.avl.stress_mode else "normal",

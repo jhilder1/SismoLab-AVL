@@ -5,6 +5,7 @@ Contiene el AVL, BST, índice de eventos, archivados, cola, pila, zonas,
 estaciones, parámetros y métricas. Toda operación pasa por aquí.
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -12,7 +13,8 @@ from domain.models import (
     SeismicEvent, Report, Association, Epicenter, Zone, Station,
     Priority, AttentionState, EventStatus,
 )
-from domain.storage import scenario_to_dict, apply_state
+from domain.storage import scenario_to_dict, apply_state, read_json_file, write_json_file
+from domain.loader import load_topology, load_insertions
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
 
@@ -670,6 +672,34 @@ class Scenario:
         self._record("PARAM_UPDATE", before,
                      f"Actualizar parámetros W={self.W_hours}h R={self.R_km}km "
                      f"L={self.L_depth} T={self.T_archive_hours}h")
+
+    # --- Persistence (Section 12) ---
+
+    def save_to_file(self, path: str) -> dict:
+        """Structural save: topology, history, queue, clock, parameters, mode, metrics."""
+        write_json_file(path, self.snapshot())
+        return {"path": path, "active": self.avl.size, "archived": len(self.archived)}
+
+    def load_scenario_file(self, path: str) -> dict:
+        """Topology load. Raises StateError with every problem and keeps the state."""
+        state, info = load_topology(self, read_json_file(path))
+        self._replace_state(state, "LOAD_TOPOLOGY",
+                            f"Cargar escenario {os.path.basename(path)}")
+        return info
+
+    def load_insertions_file(self, path: str) -> dict:
+        """Insertion load into a balanced AVL and a plain BST; returns their comparison."""
+        state, comparison = load_insertions(self, read_json_file(path))
+        self._replace_state(state, "LOAD_INSERTIONS",
+                            f"Cargar {comparison['events']} eventos por inserción "
+                            f"desde {os.path.basename(path)}")
+        return comparison
+
+    def _replace_state(self, state: dict, action_type: str, description: str) -> None:
+        """A load is one undoable action (Section 13)."""
+        before = self.snapshot()
+        apply_state(self, state)
+        self._record(action_type, before, description)
 
     # ================================================================
     # Consultas y análisis del desempeño (Sección 11)
