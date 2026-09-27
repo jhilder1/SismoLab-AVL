@@ -15,6 +15,7 @@ from domain.models import (
 )
 from domain.storage import scenario_to_dict, apply_state, read_json_file, write_json_file
 from domain.loader import load_topology, load_insertions
+from domain.validation import check_tree
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
 
@@ -51,6 +52,9 @@ class Scenario:
         self.total_reports_discarded = 0
         self.total_conflicts = 0
         self.total_confirmations = 0
+
+        # Section 8: the queue is paused while a global recovery is running.
+        self._recovery_in_progress = False
 
     def id_exists_anywhere(self, event_id: int) -> bool:
         return (event_id in self.event_index
@@ -289,6 +293,8 @@ class Scenario:
         self.report_queue.enqueue(report)
 
     def process_next_report(self) -> dict:
+        if self._recovery_in_progress:
+            return {"result": "PAUSED", "message": "Recuperación global en curso: la cola está en pausa"}
         if self.report_queue.is_empty():
             return {"result": "EMPTY", "message": "Cola vacía"}
 
@@ -544,51 +550,42 @@ class Scenario:
     # --- Auditoría ---
 
     def run_audit(self) -> dict:
-        errors = []
-        errors += self._audit_bst_order()
-        errors += self._audit_avl_balance()
-        errors += self._audit_heights()
+        """Global consistency check (Section 14).
+
+        Order, heights, unique ids and AVL/event_index consistency are always
+        real errors, in both modes: nothing about stress mode can excuse them
+        (deferred rotations never touch the BST order or the stored height,
+        both kept up to date by every insert/delete regardless of mode).
+
+        Balance factors are recalculated the same way in both modes, with the
+        iterative domain.validation.check_tree (order and heights are also
+        taken from there, so a single walk of the tree serves everything).
+        Their meaning differs by mode, though: in stress mode a factor outside
+        {-1, 0, 1} is the deferred-rotation effect the section describes, so
+        it is reported separately in `unbalanced_nodes` instead of counting
+        against `is_valid`; in normal mode every such factor is still a real
+        error, exactly as before. `is_avl` reports whether the tree currently
+        has the AVL property, independently of the mode.
+        """
+        tree_report = check_tree(self.avl)
+        errors = list(tree_report["order"]) + list(tree_report["metadata"])
         errors += self._audit_unique_ids()
         errors += self._audit_index_consistency()
-        return {"is_valid": len(errors) == 0, "errors": errors, "nodes_checked": self.avl.size}
 
-    def _audit_bst_order(self) -> list[str]:
-        errors = []
-        keys = self.avl.inorder()
-        for i in range(len(keys) - 1):
-            if keys[i] >= keys[i + 1]:
-                errors.append(f"Orden BST violado: {keys[i]} >= {keys[i+1]}")
-        return errors
-
-    def _audit_avl_balance(self) -> list[str]:
-        errors = []
+        unbalanced = tree_report["unbalanced"]
         if not self.avl.stress_mode:
-            self._check_balance_node(self.avl.root, errors)
-        return errors
+            errors += [f"Evento {event_id}: factor de balance {bf} (fuera de {{-1,0,1}})"
+                       for event_id, bf in unbalanced]
 
-    def _check_balance_node(self, node, errors):
-        if not node:
-            return
-        bf = node.balance_factor
-        if abs(bf) > 1:
-            errors.append(f"Nodo {node.key} tiene BF={bf}")
-        self._check_balance_node(node.left, errors)
-        self._check_balance_node(node.right, errors)
-
-    def _audit_heights(self) -> list[str]:
-        errors = []
-        self._verify_height(self.avl.root, errors)
-        return errors
-
-    def _verify_height(self, node, errors):
-        if not node:
-            return -1
-        left_h = self._verify_height(node.left, errors)
-        right_h = self._verify_height(node.right, errors)
-        expected = 1 + max(left_h, right_h)
-        if node.height != expected:
-            errors.append(f"Nodo {node.key}: height={node.height}, esperado={expected}")
-        return expected
+        return {
+            "is_valid": len(errors) == 0,
+            "is_avl": len(unbalanced) == 0,
+            "errors": errors,
+            "nodes_checked": self.avl.size,
+            "stress_mode": self.avl.stress_mode,
+            "unbalanced_nodes": [{"event_id": event_id, "balance_factor": bf}
+                                 for event_id, bf in unbalanced],
+        }
 
     def _audit_unique_ids(self) -> list[str]:
         errors = []
@@ -612,21 +609,86 @@ class Scenario:
 
     # --- Modo estrés ---
 
+    def _run_recovery(self) -> dict:
+        """Rebalance the AVL, with the report queue paused meanwhile (Section 8).
+
+        core.avl_tree.AVLTree.recover_balance always turns its own
+        stress_mode off as part of rebalancing; the two callers below
+        restore it afterwards when the scenario's declared mode should not
+        change by itself (see recover_balance and toggle_stress).
+
+        The engine is single-threaded and synchronous (Section 8 does not
+        require threads), so no report can actually be dequeued while this
+        call is on the stack. The flag is still real, not decorative: it is
+        what process_next_report checks, so a recovery started from inside
+        report processing (or a future asynchronous caller) is guarded too,
+        not just this call's immediate synchronous extent.
+        """
+        self._recovery_in_progress = True
+        try:
+            return self.avl.recover_balance()
+        finally:
+            self._recovery_in_progress = False
+
     def toggle_stress(self) -> dict:
+        """Enter or leave stress mode (Section 8).
+
+        Entering is unconditional: deferred balancing can start at any time.
+        Leaving runs a global recovery first and only completes when the
+        audit that follows confirms the tree is an AVL again ("El retorno al
+        modo normal solo se completa cuando la auditoría confirma el
+        equilibrio"). If the audit still finds a problem, stress mode stays
+        on, the attempted recovery is rolled back and nothing is recorded.
+        """
+        if not self.avl.stress_mode:
+            before = self.snapshot()
+            self.avl.stress_mode = True
+            self._record("TOGGLE_STRESS", before, "Entrar en modo estrés")
+            return {"stress_mode": True, "message": "Modo estrés activado"}
+
         before = self.snapshot()
-        self.avl.stress_mode = not self.avl.stress_mode
-        mode = "estrés" if self.avl.stress_mode else "normal"
-        self._record("TOGGLE_STRESS", before, f"Cambiar a modo {mode}")
-        return {"stress_mode": self.avl.stress_mode}
+        cost = self._run_recovery()          # also turns avl.stress_mode off
+        audit = self.run_audit()             # mode is already normal: balance counts as error
+        if not audit["is_valid"]:
+            apply_state(self, before)        # undo the attempt: tree and stress mode as they were
+            return {
+                "stress_mode": True,
+                "message": "La auditoría no confirma el equilibrio: el árbol sigue en modo estrés",
+                "errors": audit["errors"],
+            }
+
+        self._record("TOGGLE_STRESS", before,
+                     f"Salir de modo estrés: recuperación global, altura final {cost['final_height']}")
+        return {"stress_mode": False, "message": "Modo normal: la auditoría confirma el equilibrio",
+                "cost": cost}
 
     def recover_balance(self) -> dict:
-        if not self.avl.stress_mode:
-            return {"result": "NOT_IN_STRESS", "message": "El árbol no está en modo estrés"}
+        """Global recovery (Section 8): can run in either mode.
+
+        Rebalancing the structure is independent of the mode switch itself,
+        which only toggle_stress decides, with its audit gate: the mode is
+        restored to whatever it was before this call, so running this while
+        in stress mode fixes the tree without granting an unaudited exit. In
+        normal mode the tree should already be an AVL, so a call that finds
+        nothing to rotate is not recorded as an action (same reasoning as
+        save_version: nothing changed, so there is nothing to undo); if it
+        were unbalanced anyway, it gets repaired the same way.
+        """
+        stress_before = self.avl.stress_mode
         before = self.snapshot()
-        cost = self.avl.recover_balance()
-        self._record("RECOVER", before,
-                     f"Recuperación global: altura final {cost['final_height']}")
-        return {"result": "RECOVERED", "cost": cost}
+        cost = self._run_recovery()
+        self.avl.stress_mode = stress_before
+
+        rotated = any(cost[k] for k in ("ll", "rr", "lr", "rl"))
+        if not rotated:
+            message = "El árbol ya cumplía la propiedad AVL: no hubo rotaciones que aplicar"
+            return {"result": "ALREADY_BALANCED", "message": message,
+                    "cost": cost, "stress_mode": self.avl.stress_mode}
+
+        message = f"Recuperación global aplicada: altura final {cost['final_height']}"
+        self._record("RECOVER", before, message)
+        return {"result": "RECOVERED", "message": message,
+                "cost": cost, "stress_mode": self.avl.stress_mode}
 
     # --- Reloj y parámetros (Sections 3, 7, 9, 10) ---
 

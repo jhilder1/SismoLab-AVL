@@ -205,6 +205,86 @@ def test_scenario_stress_toggle():
     result = sc.toggle_stress()
     assert result["stress_mode"] is False
 
+
+# =====================================================================
+# Tests de modo estres: salida solo con auditoria en verde (Seccion 8)
+# =====================================================================
+
+def _degenerate_in_stress(sc, count=8):
+    """Same priority and magnitude, ascending ids: a straight chain that
+    stress mode never rotates (deferred balancing)."""
+    sc.toggle_stress()
+    for i in range(1, count + 1):
+        sc.create_event(i, 1.0, 10.0, 100.0, 100.0,
+                        datetime(2026, 6, 1, 10, 0, 0), "EST-001")
+
+def test_toggle_stress_enter_always_succeeds():
+    # Entering works even with an already-balanced, non-empty tree.
+    sc = _make_scenario()
+    for i in range(1, 4):
+        sc.create_event(i, 5.0, 10.0, 100.0, 100.0,
+                        datetime(2026, 6, 1, 10, 0, 0), "EST-001")
+    assert sc.avl.is_balanced()
+    result = sc.toggle_stress()
+    assert result["stress_mode"] is True
+    assert sc.avl.stress_mode is True
+
+def test_toggle_stress_exit_rebalances_and_confirms_audit():
+    sc = _make_scenario()
+    _degenerate_in_stress(sc)
+    assert not sc.avl.is_balanced()
+    result = sc.toggle_stress()
+    assert result["stress_mode"] is False
+    assert sc.avl.is_balanced()
+    assert sc.run_audit()["is_valid"]
+
+def test_toggle_stress_exit_undo_restores_degenerate_stress():
+    sc = _make_scenario()
+    _degenerate_in_stress(sc)
+    assert not sc.avl.is_balanced()
+    shape_before = [str(k) for k in sc.avl.preorder()]
+
+    sc.toggle_stress()  # exits: recovery + audit, one undoable action
+    assert sc.avl.is_balanced()
+
+    sc.undo()
+    assert sc.avl.stress_mode is True
+    assert not sc.avl.is_balanced()
+    assert [str(k) for k in sc.avl.preorder()] == shape_before
+
+def test_recover_balance_works_in_normal_mode():
+    sc = _make_scenario()
+    for i in range(1, 4):
+        sc.create_event(i, 5.0, 10.0, 100.0, 100.0,
+                        datetime(2026, 6, 1, 10, 0, 0), "EST-001")
+    assert sc.avl.stress_mode is False
+    result = sc.recover_balance()
+    assert result["result"] == "ALREADY_BALANCED"
+    assert result["stress_mode"] is False
+    assert sc.avl.is_balanced()
+
+def test_run_audit_in_stress_distinguishes_expected_imbalance():
+    sc = _make_scenario()
+    _degenerate_in_stress(sc)
+    audit = sc.run_audit()
+    assert not sc.avl.is_balanced()
+    assert audit["is_valid"]           # order, heights and ids are fine
+    assert audit["is_avl"] is False    # but the AVL property does not hold
+    assert audit["unbalanced_nodes"]   # reported apart, not as an error
+    assert audit["errors"] == []       # deferred imbalance alone is not an error here
+
+def test_run_audit_in_stress_still_reports_real_errors():
+    sc = _make_scenario()
+    _degenerate_in_stress(sc, count=4)
+    # Break the global order directly on the tree: a real defect, unrelated
+    # to deferred balancing, that the audit must still catch in stress mode.
+    from core.avl_tree import TreeKey
+    sc.avl.root.key = TreeKey(5, 9.9, 999)
+    audit = sc.run_audit()
+    assert audit["stress_mode"] is True
+    assert not audit["is_valid"]
+    assert any("breaks the global order" in e for e in audit["errors"])
+
 def test_scenario_summary():
     sc = _make_scenario()
     sc.create_event(1, 5.0, 50.0, 100.0, 100.0,
