@@ -344,3 +344,49 @@ input[type="datetime-local"] { font-size: 0.75rem; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text2); }
+
+/* --- Geographic map (section 15) --- */
+
+#map-svg { display: block; max-width: 100%; height: auto; }
+
+.map-plane { fill: var(--bg); stroke: var(--border); stroke-width: 2; }
+.map-grid  { stroke: var(--border); stroke-width: 0.5; opacity: 0.45; }
+
+.map-axis {
+    font-size: 13px; fill: var(--text2);
+    text-anchor: middle; pointer-events: none;
+}
+.map-axis-y { text-anchor: end; }
+
+.map-zone { stroke-width: 1.5; }
+.map-zone.pop  { fill: rgba(239, 83, 80, 0.10); stroke: rgba(239, 83, 80, 0.55); }
+.map-zone.npop { fill: rgba(108, 140, 255, 0.06); stroke: rgba(108, 140, 255, 0.35); }
+
+.map-zone-lbl {
+    font-size: 13px; fill: var(--text2);
+    pointer-events: none; letter-spacing: 0.3px;
+}
+
+.map-event { cursor: pointer; transition: filter 0.2s; }
+.map-event:hover { filter: brightness(1.5); }
+
+.map-event-lbl {
+    font-size: 11px; fill: var(--text);
+    text-anchor: middle; pointer-events: none; font-weight: 600;
+}
+
+.map-legend {
+    position: absolute; bottom: 14px; right: 18px;
+    display: flex; flex-wrap: wrap; gap: 12px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 12px;
+    font-size: 0.7rem; color: var(--text2);
+}
+.map-legend .lg { display: flex; align-items: center; gap: 5px; }
+.map-legend .sw { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.sw-p3 { background: #c62828; }
+.sw-p2 { background: #ef6c00; }
+.sw-p1 { background: #2e7d32; }
+.sw-rev { background: none; border: 2px solid var(--text2); }
+.sw-pop  { border-radius: 2px; background: rgba(239, 83, 80, 0.25); border: 1px solid rgba(239, 83, 80, 0.6); }
+.sw-npop { border-radius: 2px; background: rgba(108, 140, 255, 0.15); border: 1px solid rgba(108, 140, 255, 0.4); }

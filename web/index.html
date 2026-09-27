@@ -60,7 +60,7 @@
                     <input type="number" id="ev-y" placeholder="Epicentro Y" step="0.1" min="0" max="1000">
                 </div>
                 <input type="datetime-local" id="ev-time" class="full-w">
-                <button onclick="createEvent()" class="btn btn-primary full-w">Crear Evento</button>
+                <button onclick="window.createEvent()" class="btn btn-primary full-w">Crear Evento</button>
             </section>
 
             <!-- Corregir Evento -->
@@ -153,17 +153,28 @@
             </section>
         </aside>
 
-        <!-- CENTER: Tree Visualization -->
+        
+                <!-- CENTER: Tree Visualization -->
         <main id="tree-area" class="tree-area">
             <div class="tree-header">
                 <div class="tree-tabs">
                     <button id="tab-avl" onclick="showTree('avl')" class="btn btn-sm tab active">Arbol AVL</button>
                     <button id="tab-bst" onclick="showTree('bst')" class="btn btn-sm tab">BST comparativo</button>
+                    <button id="tab-map" onclick="showTree('map')" class="btn btn-sm tab">Plano geografico</button>
                 </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
             <div id="tree-container" class="tree-container">
                 <svg id="tree-svg"></svg>
+                <svg id="map-svg" style="display:none"></svg>
+                <div id="map-legend" class="map-legend" style="display:none">
+                    <span class="lg"><i class="sw sw-p3"></i>Alta</span>
+                    <span class="lg"><i class="sw sw-p2"></i>Media</span>
+                    <span class="lg"><i class="sw sw-p1"></i>Baja</span>
+                    <span class="lg"><i class="sw sw-pop"></i>Zona poblada</span>
+                    <span class="lg"><i class="sw sw-npop"></i>No poblada</span>
+                    <span class="lg"><i class="sw sw-rev"></i>Revisado</span>
+                </div>
                 <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>
             </div>
         </main>
