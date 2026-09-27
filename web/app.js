@@ -132,17 +132,26 @@ function showTree(view) {
     $("tab-avl").classList.toggle("active", view === "avl");
     $("tab-bst").classList.toggle("active", view === "bst");
     $("tab-map").classList.toggle("active", view === "map");
+    $("tab-queries").classList.toggle("active", view === "queries");
     drawCurrentTree();
 }
 
 function drawCurrentTree() {
     if (!lastState) return;
     const isMap = treeView === "map";
-    $("tree-svg").style.display = isMap ? "none" : "block";
+    const isQueries = treeView === "queries";
+    $("tree-svg").style.display = (!isMap && !isQueries) ? "block" : "none";
     $("map-svg").style.display = isMap ? "block" : "none";
     $("map-legend").style.display = isMap ? "flex" : "none";
+    $("queries-panel").style.display = isQueries ? "flex" : "none";
     $("tree-empty").style.display = "none";
 
+    if (isQueries) {
+        // The queries panel keeps whatever result is already on screen: it
+        // does not redraw on every refresh, same as the search result box.
+        $("tree-root").textContent = "Consultas del catalogo activo (Seccion 11)";
+        return;
+    }
     if (isMap) {
         drawMap();
         const n = (lastState.events || []).length;
@@ -442,6 +451,158 @@ async function archiveEligible() {
         log(res.message || "No hay ramas elegibles para archivar", "info");
     }
     refresh();
+}
+
+// =====================================================
+// Queries and performance analysis (Section 11)
+// =====================================================
+
+const PRIORITY_NAME = ["", "BAJA", "MEDIA", "ALTA"];
+
+// Shared body for an event card; eventCardHtml wraps it, costlyCardHtml
+// appends one more line without nesting a second .event-card inside it.
+function eventCardInner(e) {
+    const id = "SIS-" + String(e.event_id).padStart(6, "0");
+    const date = (e.occurrence_time || "").replace("T", " ").replace("Z", "");
+    return `<div class="ev-id">${id}</div>
+        <div class="ev-detail">M=${e.magnitude} | P=${PRIORITY_NAME[e.priority] || e.priority} | Prof=${e.depth_km} km | Rev=${e.revision}</div>
+        <div class="ev-detail">Epi=(${e.epicenter.x}, ${e.epicenter.y}) | ${esc(date)} | ${e.attention_state}</div>`;
+}
+
+function eventCardHtml(e) {
+    return `<div class="event-card p${e.priority}">${eventCardInner(e)}</div>`;
+}
+
+function costlyCardHtml(c) {
+    return `<div class="event-card p${c.event.priority}">${eventCardInner(c.event)}
+        <div class="ev-detail costly-line">Clave=${esc(c.key)} | profundidad del nodo=${c.depth} (L=${c.limit_L}) | nodos visitados=${c.nodes_visited}</div>
+    </div>`;
+}
+
+// Sub-tab inside the Consultas panel: one form and one set of results shown
+// at a time, so switching query never mixes a stale result with a new one.
+function showQuery(name) {
+    document.querySelectorAll(".qtab").forEach(b => b.classList.toggle("active", b.dataset.q === name));
+    document.querySelectorAll(".query-form").forEach(f => f.classList.toggle("hidden", f.id !== `qform-${name}`));
+    $("query-cost").classList.add("hidden");
+    $("query-results").innerHTML = "";
+}
+
+// Section 11: every query reports how many AVL nodes it examined. That cost
+// always goes on its own highlighted line, never buried inside the results.
+function showQueryCost(text) {
+    const box = $("query-cost");
+    box.textContent = text;
+    box.classList.remove("hidden");
+}
+
+function showQueryResults(html) {
+    $("query-results").innerHTML = html;
+}
+
+function showQueryError(message) {
+    $("query-cost").classList.add("hidden");
+    $("query-results").innerHTML = `<p class="query-error">${esc(message)}</p>`;
+    log(message, "err");
+}
+
+async function runQueryTopK() {
+    const k = val("q-topk-k") || "5";
+    const res = await eel.query_top_k_pending(k)();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+    const active = lastState ? lastState.counts.active : "?";
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${active} activos | k solicitado=${d.k} | obtenidos=${d.count}`);
+    showQueryResults(d.results.length ? d.results.map(eventCardHtml).join("")
+        : '<p class="muted">No hay eventos pendientes.</p>');
+}
+
+async function runQueryInterval() {
+    const minMag = val("q-int-min"), maxMag = val("q-int-max");
+    if (minMag === "" || maxMag === "") { log("Magnitud minima y maxima son obligatorias", "err"); return; }
+    const depth = val("q-int-depth") || null;
+    // datetime-local gives "YYYY-MM-DDTHH:MM" (no seconds). Checked against
+    // this project's Python (3.11+): datetime.fromisoformat accepts that
+    // directly, so nothing is appended here, same as createEvent's ev-time.
+    const from = val("q-int-from") || null;
+    const to = val("q-int-to") || null;
+    const res = await eel.query_by_interval(minMag, maxMag, depth, from, to)();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+    const active = lastState ? lastState.counts.active : "?";
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${active} activos | resultados=${d.count}`);
+    showQueryResults(d.results.length ? d.results.map(eventCardHtml).join("")
+        : '<p class="muted">Ningun evento cumple el intervalo.</p>');
+}
+
+async function runQueryAssociations() {
+    const id = val("q-assoc-id");
+    if (!id) { log("Indica un ID de evento", "err"); return; }
+    const res = await eel.query_event_associations(id)();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+
+    // This query walks active and archived events, not the AVL, so there is
+    // no node-examined count to report here (unlike the other four).
+    showQueryCost(`Esta consulta recorre eventos activos y archivados, no el AVL: no hay nodos examinados que reportar `
+        + `| candidatos=${d.candidates.length} | referencias entrantes=${d.replicas.length}`);
+
+    const statusBadge = s => `<span class="status-badge ${s === "ACTIVO" ? "active" : "archived"}">${s}</span>`;
+    const fmtId = id => "SIS-" + String(id).padStart(6, "0");
+
+    let html = `<div class="assoc-block"><h4>Evento consultado</h4>
+        <div>${fmtId(d.event_id)} ${statusBadge(d.status)}</div></div>`;
+
+    html += `<div class="assoc-block"><h4>Referencia elegida</h4>`;
+    html += d.reference
+        ? `<div class="assoc-row">${fmtId(d.reference.event_id)} M=${d.reference.magnitude} ${statusBadge(d.reference.status)}</div>`
+        : `<p class="muted">Sin referencia.</p>`;
+    html += `</div>`;
+
+    html += `<div class="assoc-block"><h4>Candidatos (${d.candidates.length})</h4>`;
+    html += d.candidates.length
+        ? d.candidates.map(c => `<div class="assoc-row">${fmtId(c.event_id)} M=${c.magnitude} | H=${c.depth_km} km `
+            + `| distancia=${c.distance_km} km | &Delta;t=${c.time_delta_hours} h ${statusBadge(c.status)}</div>`).join("")
+        : `<p class="muted">Sin candidatos.</p>`;
+    html += `</div>`;
+
+    html += `<div class="assoc-block"><h4>Eventos que lo usan como referencia (${d.replicas.length})</h4>`;
+    html += d.replicas.length
+        ? d.replicas.map(r => `<div class="assoc-row">${fmtId(r.event_id)} M=${r.magnitude} ${statusBadge(r.status)}</div>`).join("")
+        : `<p class="muted">Ninguno.</p>`;
+    html += `</div>`;
+
+    showQueryResults(html);
+}
+
+async function runQueryCostly() {
+    const res = await eel.query_costly_high_priority()();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+    // The relevant cost here is the sum of nodes visited across every
+    // individual key search, not one tree walk (Sections 9 and 11).
+    const totalVisited = d.costly_events.reduce((sum, c) => sum + c.nodes_visited, 0);
+    showQueryCost(`Nodos visitados en total (suma de cada busqueda por clave): ${totalVisited} `
+        + `| limite L=${d.limit_L} | eventos costosos=${d.count}`);
+    showQueryResults(d.costly_events.length ? d.costly_events.map(costlyCardHtml).join("")
+        : '<p class="muted">Ningun evento de prioridad alta supera el limite L.</p>');
+}
+
+async function runQueryCompare() {
+    const res = await eel.compare_trees_view()();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+    showQueryCost(`Comparacion sobre los ${d.size} eventos activos actuales `
+        + `(compara dos estructuras completas, no es una busqueda por clave)`);
+    const row = (label, key) => `<tr><td>${label}</td><td>${d.avl[key] ?? "--"}</td><td>${d.bst[key] ?? "--"}</td></tr>`;
+    showQueryResults(`<table class="query-table">
+        <tr><th></th><th>AVL</th><th>BST</th></tr>
+        ${row("Raiz", "root")}
+        ${row("Altura", "height")}
+        ${row("Hojas", "leaves")}
+        ${row("Comparaciones totales (buscar todas las claves)", "total_comparisons")}
+        ${row("Comparaciones promedio", "avg_comparisons")}
+    </table>`);
 }
 
 // =====================================================

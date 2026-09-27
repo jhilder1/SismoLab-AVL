@@ -170,14 +170,14 @@
             </section>
         </aside>
 
-        
-                <!-- CENTER: Tree Visualization -->
+        <!-- CENTER: Tree Visualization -->
         <main id="tree-area" class="tree-area">
             <div class="tree-header">
                 <div class="tree-tabs">
                     <button id="tab-avl" onclick="showTree('avl')" class="btn btn-sm tab active">Arbol AVL</button>
                     <button id="tab-bst" onclick="showTree('bst')" class="btn btn-sm tab">BST comparativo</button>
                     <button id="tab-map" onclick="showTree('map')" class="btn btn-sm tab">Plano geografico</button>
+                    <button id="tab-queries" onclick="showTree('queries')" class="btn btn-sm tab">Consultas</button>
                 </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
@@ -193,6 +193,54 @@
                     <span class="lg"><i class="sw sw-rev"></i>Revisado</span>
                     <span class="lg"><i class="sw sw-costly"></i>Acceso costoso</span>
                 </div>
+
+                <!-- Consultas y analisis del desempeno (Seccion 11) -->
+                <div id="queries-panel" class="queries-panel" style="display:none">
+                    <div class="query-tabs">
+                        <button class="btn btn-sm qtab active" data-q="topk" onclick="window.showQuery('topk')">Top k pendientes</button>
+                        <button class="btn btn-sm qtab" data-q="interval" onclick="window.showQuery('interval')">Intervalo</button>
+                        <button class="btn btn-sm qtab" data-q="assoc" onclick="window.showQuery('assoc')">Asociaciones</button>
+                        <button class="btn btn-sm qtab" data-q="costly" onclick="window.showQuery('costly')">Acceso costoso</button>
+                        <button class="btn btn-sm qtab" data-q="compare" onclick="window.showQuery('compare')">Comparativa AVL/BST</button>
+                    </div>
+
+                    <div id="qform-topk" class="query-form">
+                        <div class="form-row">
+                            <input type="number" id="q-topk-k" placeholder="k" min="1" step="1" value="5">
+                            <button onclick="window.runQueryTopK()" class="btn btn-primary">Consultar</button>
+                        </div>
+                    </div>
+                    <div id="qform-interval" class="query-form hidden">
+                        <div class="form-row">
+                            <input type="number" id="q-int-min" placeholder="Magnitud minima" step="0.1">
+                            <input type="number" id="q-int-max" placeholder="Magnitud maxima" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <input type="number" id="q-int-depth" placeholder="Profundidad maxima km (opcional)" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <label class="param">Desde (opcional)<input type="datetime-local" id="q-int-from"></label>
+                            <label class="param">Hasta (opcional)<input type="datetime-local" id="q-int-to"></label>
+                        </div>
+                        <button onclick="window.runQueryInterval()" class="btn btn-primary full-w">Consultar</button>
+                    </div>
+                    <div id="qform-assoc" class="query-form hidden">
+                        <div class="form-row">
+                            <input type="number" id="q-assoc-id" placeholder="ID del evento">
+                            <button onclick="window.runQueryAssociations()" class="btn btn-primary">Consultar</button>
+                        </div>
+                    </div>
+                    <div id="qform-costly" class="query-form hidden">
+                        <button onclick="window.runQueryCostly()" class="btn btn-primary full-w">Consultar acceso costoso</button>
+                    </div>
+                    <div id="qform-compare" class="query-form hidden">
+                        <button onclick="window.runQueryCompare()" class="btn btn-primary full-w">Comparar AVL vs BST</button>
+                    </div>
+
+                    <div id="query-cost" class="query-cost hidden"></div>
+                    <div id="query-results" class="query-results"></div>
+                </div>
+
                 <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>
             </div>
         </main>
