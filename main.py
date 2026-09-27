@@ -265,20 +265,6 @@ def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=Non
     except Exception as e:
         return {"ok": False, "message": str(e)}
 
-@eel.expose
-def get_zones():
-    """Return scenario zones for the geographic map view."""
-    return [
-        {
-            "name": z.name,
-            "x_min": z.x_min, "x_max": z.x_max,
-            "y_min": z.y_min, "y_max": z.y_max,
-            "populated": z.is_populated,
-        }
-        for z in sc.zones
-    ]
-
-
 
 # =================================================================
 # Persistencia (Sección 12): explorador de archivos + carga/guardado

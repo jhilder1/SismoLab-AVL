@@ -390,3 +390,35 @@ input[type="datetime-local"] { font-size: 0.75rem; }
 .sw-rev { background: none; border: 2px solid var(--text2); }
 .sw-pop  { border-radius: 2px; background: rgba(239, 83, 80, 0.25); border: 1px solid rgba(239, 83, 80, 0.6); }
 .sw-npop { border-radius: 2px; background: rgba(108, 140, 255, 0.15); border: 1px solid rgba(108, 140, 255, 0.4); }
+/* --- Costly access marker (section 9) --- */
+
+.node-costly {
+    fill: none;
+    stroke: var(--yellow);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    pointer-events: none;
+}
+.node-costly-mark {
+    font-size: 13px;
+    fill: var(--yellow);
+    font-weight: 700;
+    pointer-events: none;
+}
+.map-costly {
+    fill: none;
+    stroke: var(--yellow);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    pointer-events: none;
+}
+
+.sw-costly { background: none; border: 2px dashed var(--yellow); }
+
+/* --- Parameters panel --- */
+label.param {
+    display: flex; flex-direction: column; flex: 1; gap: 3px;
+    font-size: 0.65rem; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+label.param input { text-transform: none; letter-spacing: 0; }

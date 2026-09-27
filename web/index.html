@@ -29,6 +29,9 @@
         <div class="stat"><span class="stat-val" id="st-deleted">0</span><span class="stat-lbl">Eliminados</span></div>
         <div class="stat"><span class="stat-val" id="st-queue">0</span><span class="stat-lbl">Cola</span></div>
         <div class="stat"><span class="stat-val" id="st-undo">0</span><span class="stat-lbl">Undo</span></div>
+        <div class="stat"><span class="stat-val" id="st-pending">0</span><span class="stat-lbl">Pendientes</span></div>
+        <div class="stat"><span class="stat-val" id="st-costly">0</span><span class="stat-lbl">Costosos</span></div>
+        <div class="stat"><span class="stat-val" id="st-limit">3</span><span class="stat-lbl">Límite L</span></div>
         <div class="stat sep"><span class="stat-val" id="st-height">-1</span><span class="stat-lbl">Altura</span></div>
         <div class="stat"><span class="stat-val" id="st-leaves">0</span><span class="stat-lbl">Hojas</span></div>
         <div class="stat"><span class="stat-val" id="st-balanced">--</span><span class="stat-lbl">Balance</span></div>
@@ -115,6 +118,20 @@
                 </div>
             </section>
 
+            <!-- Parámetros W, R, L, T -->
+            <section class="card">
+                <h3>Parámetros</h3>
+                <div class="form-row">
+                    <label class="param">W horas<input type="number" id="par-w" min="0" step="any"></label>
+                    <label class="param">R km<input type="number" id="par-r" min="0" step="any"></label>
+                </div>
+                <div class="form-row">
+                    <label class="param">L profundidad<input type="number" id="par-l" min="0" step="1"></label>
+                    <label class="param">T horas<input type="number" id="par-t" min="0" step="any"></label>
+                </div>
+                <button onclick="window.applyParameters()" class="btn btn-primary full-w">Aplicar parámetros</button>
+            </section>
+
             <!-- Acciones -->
             <section class="card">
                 <h3>Acciones</h3>
@@ -174,6 +191,7 @@
                     <span class="lg"><i class="sw sw-pop"></i>Zona poblada</span>
                     <span class="lg"><i class="sw sw-npop"></i>No poblada</span>
                     <span class="lg"><i class="sw sw-rev"></i>Revisado</span>
+                    <span class="lg"><i class="sw sw-costly"></i>Acceso costoso</span>
                 </div>
                 <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>
             </div>

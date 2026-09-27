@@ -22,6 +22,8 @@ function esc(text) {
 let lastState = null;
 let treeView = "avl";
 let zonesCache = null;
+let limitL = 3;                 // access-depth budget L (section 9)
+let costlyIds = new Set();      // event ids currently marked as costly access
 
 // =====================================================
 // Refresh: trae el estado y actualiza toda la pantalla
@@ -31,6 +33,10 @@ async function refresh() {
     try {
         const state = await eel.get_state()();
         lastState = state;
+        limitL = state.parameters.L_depth;
+        zonesCache = state.zones;
+        computeCostly(state.tree.nodes);
+        fillParameters(state.parameters);
         updateStats(state);
         drawCurrentTree();
         updateEvents(state.events);
@@ -38,6 +44,24 @@ async function refresh() {
         $("clock").textContent = state.clock.replace("T", " ");
     } catch (e) {
         log("Error al conectar con Python: " + e, "err");
+    }
+}
+
+// =====================================================
+// Costly access (section 9)
+// =====================================================
+
+// An active high-priority event is costly when its node depth exceeds L.
+// Depth is derived from the tree the backend already sends: the root is 0
+// and every child is its parent's depth plus one.
+function computeCostly(root) {
+    costlyIds = new Set();
+    const stack = root ? [[root, 0]] : [];
+    while (stack.length) {
+        const [node, depth] = stack.pop();
+        if (node.priority === 3 && depth > limitL) costlyIds.add(node.event_id);
+        if (node.left) stack.push([node.left, depth + 1]);
+        if (node.right) stack.push([node.right, depth + 1]);
     }
 }
 
@@ -51,6 +75,10 @@ function updateStats(state) {
     $("st-deleted").textContent = state.counts.deleted;
     $("st-queue").textContent = state.counts.queued_reports;
     $("st-undo").textContent = state.counts.undo_depth;
+    $("st-pending").textContent = state.counts.pending;
+    $("st-costly").textContent = state.counts.costly_access;
+    $("st-costly").style.color = state.counts.costly_access > 0 ? "var(--yellow)" : "";
+    $("st-limit").textContent = state.parameters.L_depth;
     $("st-height").textContent = state.tree.height;
     $("st-leaves").textContent = state.tree.leaves;
     $("st-balanced").textContent = state.tree.balanced ? "Si" : "NO";
@@ -215,6 +243,15 @@ function updateTree(treeData) {
         }
 
         html += `<circle class="node-circle" cx="${cx}" cy="${cy}" r="${NODE_R}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+
+        // Costly access (section 9): high priority AND node depth > L.
+        // Shown as a dashed outer ring so it stays distinct from the
+        // priority colour, which is the node fill.
+        // The BST view has no such mark: costly ids come from the AVL.
+        if (treeView === "avl" && costlyIds.has(n.event_id)) {
+            html += `<circle class="node-costly" cx="${cx}" cy="${cy}" r="${NODE_R + 5}"/>`;
+            html += `<text class="node-costly-mark" x="${cx + NODE_R + 3}" y="${cy - NODE_R + 4}">$</text>`;
+        }
         html += `<text class="node-label" x="${cx}" y="${cy + 1}">ID:${n.event_id}</text>`;
         html += `<text class="node-sublabel" x="${cx}" y="${cy + 13}">M${n.magnitude}</text>`;
 
@@ -257,7 +294,6 @@ function drawMap() {
 
     // Plane background
     html += `<rect class="map-plane" x="${MAP_PAD}" y="${MAP_PAD}" width="${MAP_SIZE}" height="${MAP_SIZE}"/>`;
-
     // Grid and axis labels every 100 km
     for (let k = 0; k <= MAP_SIZE; k += 100) {
         html += `<line class="map-grid" x1="${mapX(k)}" y1="${mapY(0)}" x2="${mapX(k)}" y2="${mapY(MAP_SIZE)}"/>`;
@@ -286,6 +322,10 @@ function drawMap() {
         const reviewed = e.attention_state === "reviewed";
         const stroke = PRIORITY_FILL[e.priority] || "#3a4a6b";
         const fill = reviewed ? "none" : stroke;
+        // Costly access (section 9): dashed ring, separate from the priority colour
+        if (costlyIds.has(e.event_id)) {
+            html += `<circle class="map-costly" cx="${cx}" cy="${cy}" r="${r + 6}"/>`;
+        }
         html += `<circle class="map-event" cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2.5">
             <title>SIS-${String(e.event_id).padStart(6, "0")} | M=${e.magnitude} | P=${e.priority} | H=${e.depth_km} km | Epi=(${e.epicenter.x}, ${e.epicenter.y}) | ${e.attention_state}</title></circle>`;
         html += `<text class="map-event-lbl" x="${cx}" y="${cy - r - 5}">${e.event_id}</text>`;
@@ -401,6 +441,34 @@ async function archiveEligible() {
     } else {
         log(res.message || "No hay ramas elegibles para archivar", "info");
     }
+    refresh();
+}
+
+// =====================================================
+// Parameters W, R, L, T (sections 7, 9 and 10)
+// =====================================================
+
+// Order matches update_parameters(w_hours, r_km, l_depth, t_archive_hours).
+const PARAM_FIELDS = [
+    ["par-w", "W_hours"],
+    ["par-r", "R_km"],
+    ["par-l", "L_depth"],
+    ["par-t", "T_archive_hours"],
+];
+
+// Preload the current values, but never overwrite a field being edited.
+function fillParameters(params) {
+    for (const [id, key] of PARAM_FIELDS) {
+        const input = $(id);
+        if (document.activeElement !== input) input.value = params[key];
+    }
+}
+
+// An empty field is sent as null so a single parameter can be changed.
+async function applyParameters() {
+    const args = PARAM_FIELDS.map(([id]) => val(id).trim() === "" ? null : Number(val(id)));
+    const res = await eel.update_parameters(...args)();
+    log(res.message, res.ok ? "ok" : "err");
     refresh();
 }
 
@@ -526,18 +594,9 @@ async function init() {
         sel.innerHTML = stations.map(s => `<option value="${s.station_id}">${s.station_id}</option>`).join("");
     }
     // Poner fecha default
-        // Poner fecha default
     const now = "2026-01-01T00:00";
     $("ev-time").value = now;
     $("rp-time").value = now;
-
-    // Zones are fixed for the whole scenario, so they are fetched once.
-    try {
-        zonesCache = await eel.get_zones()();
-    } catch (e) {
-        zonesCache = [];
-        log("No se pudieron cargar las zonas del escenario", "err");
-    }
 
     refresh();
     refreshVersions();
