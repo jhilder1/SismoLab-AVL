@@ -40,6 +40,7 @@ async function refresh() {
         updateStats(state);
         drawCurrentTree();
         updateEvents(state.events);
+        renderQueue(state.queued_reports);
         updateStress(state.stress_mode);
         $("clock").textContent = state.clock.replace("T", " ");
     } catch (e) {
@@ -133,6 +134,7 @@ function showTree(view) {
     $("tab-bst").classList.toggle("active", view === "bst");
     $("tab-map").classList.toggle("active", view === "map");
     $("tab-queries").classList.toggle("active", view === "queries");
+    $("tab-queue").classList.toggle("active", view === "queue");
     drawCurrentTree();
 }
 
@@ -140,12 +142,22 @@ function drawCurrentTree() {
     if (!lastState) return;
     const isMap = treeView === "map";
     const isQueries = treeView === "queries";
-    $("tree-svg").style.display = (!isMap && !isQueries) ? "block" : "none";
+    const isQueue = treeView === "queue";
+    $("tree-svg").style.display = (!isMap && !isQueries && !isQueue) ? "block" : "none";
     $("map-svg").style.display = isMap ? "block" : "none";
     $("map-legend").style.display = isMap ? "flex" : "none";
     $("queries-panel").style.display = isQueries ? "flex" : "none";
+    $("queue-panel").style.display = isQueue ? "flex" : "none";
     $("tree-empty").style.display = "none";
 
+    if (isQueue) {
+        // The pending list and the history are refreshed by their own
+        // functions (renderQueue on every refresh, renderHistory on every
+        // processed step); this tab only needs its own header text.
+        const n = (lastState.queued_reports || []).length;
+        $("tree-root").textContent = `Cola FIFO de reportes | ${n} pendiente(s)`;
+        return;
+    }
     if (isQueries) {
         // The queries panel keeps whatever result is already on screen: it
         // does not redraw on every refresh, same as the search result box.
@@ -395,13 +407,170 @@ async function enqueueReport() {
     if (res.ok) refresh();
 }
 
+// =====================================================
+// Report queue and continuous processing (Section 8)
+// =====================================================
+
+// Spanish label, colour family and a short generic reason for each decision
+// process_next_report can return (domain/scenario.py:295 onward). The family
+// picks the CSS class: create/correct the catalogue, only confirm, or reject.
+const REPORT_DECISIONS = {
+    CREATED:            { label: "Creado",                family: "create",  why: "Identificador desconocido: se registra como evento nuevo" },
+    CORRECTED:          { label: "Corregido",              family: "create",  why: "Revision mayor que la vigente: se actualizan los datos" },
+    REACTIVATED:        { label: "Reactivado",             family: "create",  why: "Revision mayor sobre un evento archivado: vuelve al AVL" },
+    CONFIRMED:          { label: "Confirmado",             family: "confirm", why: "Misma revision y mismos datos: se anade la estacion" },
+    CONFIRMED_ARCHIVED: { label: "Confirmado (archivado)", family: "confirm", why: "Misma revision y mismos datos sobre un evento archivado" },
+    CONFLICT:           { label: "Conflicto",              family: "reject",  why: "Misma revision pero datos distintos: se rechaza" },
+    OUTDATED:           { label: "Desactualizado",         family: "reject",  why: "Revision menor que la vigente: se descarta" },
+    REJECTED:           { label: "Rechazado",              family: "reject",  why: "Datos invalidos o evento eliminado: no se aplica" },
+};
+
+// The frontend's own record of processed steps. Section 8 asks that each
+// step show its decision and rotations, not that the record survive a
+// restart (unlike the undo stack or the named versions), so it lives only
+// here, most recent first.
+let reportHistory = [];
+let continuousRunning = false;
+
+function renderQueue(reports) {
+    const box = $("queue-pending");
+    if (!reports || reports.length === 0) {
+        box.innerHTML = '<p class="muted">Cola vacia: no hay reportes pendientes.</p>';
+        return;
+    }
+    // Position in the queue, not the event's priority, decides this order:
+    // that is the point being shown here (Section 8).
+    const rows = reports.map((r, i) => `<tr class="${i === 0 ? "queue-next" : ""}">
+        <td>${i === 0 ? "Siguiente" : i + 1}</td>
+        <td>SIS-${String(r.event_id).padStart(6, "0")}</td>
+        <td>${esc(r.station_id)}</td>
+        <td>${r.revision}</td>
+        <td>${r.magnitude}</td>
+        <td>${r.depth_km}</td>
+        <td>(${r.epicenter.x}, ${r.epicenter.y})</td>
+        <td>${esc((r.occurrence_time || "").replace("T", " ").replace("Z", ""))}</td>
+    </tr>`).join("");
+    box.innerHTML = `<table class="queue-table">
+        <tr><th>#</th><th>Evento</th><th>Estacion</th><th>Rev</th><th>M</th><th>H (km)</th><th>Epicentro</th><th>Ocurrencia</th></tr>
+        ${rows}
+    </table>`;
+}
+
+// Extra, decision-specific detail the backend does provide (a rejection's
+// reason, or the two revisions compared in an outdated report).
+function decisionExtra(result) {
+    const parts = [];
+    if (result.reason) parts.push(result.reason);
+    if (result.report_rev !== undefined && result.current_rev !== undefined) {
+        parts.push(`reporte rev ${result.report_rev} vs vigente rev ${result.current_rev}`);
+    }
+    return parts.join(" — ");
+}
+
+function renderHistory() {
+    const box = $("queue-history");
+    if (!reportHistory.length) {
+        box.innerHTML = '<p class="muted">Sin reportes procesados todavia.</p>';
+        return;
+    }
+    box.innerHTML = reportHistory.map(entry => {
+        const meta = REPORT_DECISIONS[entry.result] || { label: entry.result, family: "confirm", why: "" };
+        const rot = entry.rotations;
+        const rotated = rot.ll || rot.rr || rot.lr || rot.rl || rot.simple_left || rot.simple_right;
+        const rotText = rotated
+            ? `LL=${rot.ll} RR=${rot.rr} LR=${rot.lr} RL=${rot.rl} | giro izq=${rot.simple_left} der=${rot.simple_right}`
+            : "sin rotaciones";
+        const extra = entry.extra ? ` — ${esc(entry.extra)}` : "";
+        return `<div class="history-entry family-${meta.family}">
+            <div class="history-head">
+                <span class="history-decision">${esc(meta.label)}</span>
+                <span class="history-who">${esc(entry.station)} &rarr; SIS-${String(entry.eventId).padStart(6, "0")} rev ${entry.revision}</span>
+            </div>
+            <div class="history-why">${esc(meta.why)}${extra}</div>
+            <div class="history-rot">${rotText}</div>
+        </div>`;
+    }).join("");
+}
+
+// Runs exactly one queue step. The backend's result does not always carry
+// the station or the revision (Section 8 still asks for both), so the
+// pending report is read here before it is dequeued; the rotations it
+// produced are the AVL's rotation counters before this call minus after.
+// Nothing is dequeued on EMPTY or PAUSED, so no history entry is added then.
+async function processOneReport() {
+    const pending = lastState && lastState.queued_reports ? lastState.queued_reports[0] : null;
+    const before = lastState ? { ...lastState.rotations } : null;
+
+    const result = await eel.process_report()();
+    if (result.result === "EMPTY" || result.result === "PAUSED") {
+        return result;
+    }
+
+    await refresh();
+
+    const after = lastState.rotations;
+    const rotations = before ? {
+        ll: after.ll - before.ll, rr: after.rr - before.rr,
+        lr: after.lr - before.lr, rl: after.rl - before.rl,
+        simple_left: after.simple_left - before.simple_left,
+        simple_right: after.simple_right - before.simple_right,
+    } : { ll: 0, rr: 0, lr: 0, rl: 0, simple_left: 0, simple_right: 0 };
+
+    reportHistory.unshift({
+        station: pending ? pending.station_id : "?",
+        eventId: pending ? pending.event_id : result.event_id,
+        revision: pending ? pending.revision : (result.revision ?? "?"),
+        result: result.result,
+        extra: decisionExtra(result),
+        rotations,
+    });
+    renderHistory();
+
+    return result;
+}
+
 async function processReport() {
-    const res = await eel.process_report()();
-    const msg = res.message || `Reporte procesado: ${res.result}` +
-        (res.event_id ? ` (evento ${res.event_id})` : "") +
-        (res.reason ? ` - ${res.reason}` : "");
-    log(msg, res.result === "CREATED" || res.result === "CONFIRMED" || res.result === "CORRECTED" ? "ok" : "info");
-    refresh();
+    const result = await processOneReport();
+    if (result.result === "EMPTY" || result.result === "PAUSED") {
+        log(result.message, "info");
+        return;
+    }
+    const meta = REPORT_DECISIONS[result.result];
+    log(meta ? `${meta.label}: ${meta.why}` : `Reporte procesado: ${result.result}`,
+        meta && meta.family === "reject" ? "err" : "ok");
+}
+
+// One report per step, each fully resolved before the next starts, with a
+// visible pause in between (Section 8). continuousRunning guards against two
+// loops at once; the loop also stops on an empty queue (via EMPTY), on
+// PAUSED (a recovery is running), or when the button is clicked again.
+async function processContinuous() {
+    const button = $("btn-continuous");
+    if (continuousRunning) {
+        continuousRunning = false;   // "Pausar": the loop checks this before its next step
+        return;
+    }
+
+    continuousRunning = true;
+    button.textContent = "Pausar";
+    button.classList.replace("btn-primary", "btn-danger");
+
+    const delay = Number(val("continuous-delay"));
+    try {
+        while (continuousRunning) {
+            const result = await processOneReport();
+            if (result.result === "EMPTY" || result.result === "PAUSED") {
+                log(result.message, "info");
+                break;
+            }
+            if (!continuousRunning) break;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    } finally {
+        continuousRunning = false;
+        button.textContent = "Procesar continuo";
+        button.classList.replace("btn-danger", "btn-primary");
+    }
 }
 
 async function undoAction() {
@@ -759,6 +928,7 @@ async function init() {
     $("ev-time").value = now;
     $("rp-time").value = now;
 
+    renderHistory();
     refresh();
     refreshVersions();
 }

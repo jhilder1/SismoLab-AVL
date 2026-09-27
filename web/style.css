@@ -470,6 +470,53 @@ input[type="datetime-local"] { font-size: 0.75rem; }
 
 .query-error { color: var(--red); text-align: center; padding: 16px 0; font-size: 0.85rem; }
 
+/* --- Report queue and continuous processing (section 8) --- */
+
+.queue-panel {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 24px;
+    overflow-y: auto;
+    align-self: stretch;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+.queue-panel h4 {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--accent); margin-top: 6px;
+}
+
+.queue-controls { display: flex; align-items: flex-end; gap: 12px; }
+.queue-controls .param { flex: 0 0 auto; min-width: 110px; }
+
+.queue-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.queue-table th, .queue-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.queue-table tr.queue-next { background: rgba(108, 140, 255, 0.12); }
+.queue-table tr.queue-next td:first-child { color: var(--accent); font-weight: 700; }
+
+.history-entry {
+    background: var(--bg3);
+    border-left: 3px solid var(--text2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    margin-bottom: 6px;
+}
+.history-entry.family-create  { border-left-color: var(--green); }
+.history-entry.family-confirm { border-left-color: var(--accent2); }
+.history-entry.family-reject  { border-left-color: var(--red); }
+
+.history-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.history-decision { font-weight: 700; }
+.family-create  .history-decision { color: var(--green); }
+.family-confirm .history-decision { color: var(--accent2); }
+.family-reject  .history-decision { color: var(--red); }
+.history-who { color: var(--text2); }
+.history-why { color: var(--text2); margin-top: 2px; }
+.history-rot { color: var(--yellow); margin-top: 2px; font-size: 0.72rem; }
+
 /* --- Parameters panel --- */
 label.param {
     display: flex; flex-direction: column; flex: 1; gap: 3px;
