@@ -373,12 +373,18 @@ if __name__ == "__main__":
     print("Cerrando la ventana se detiene el servidor.")
 
     # Intentar con Edge (viene con Windows), si no con el navegador por defecto
-    try:
-        eel.browsers.set_path("edge", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-        eel.start("index.html", size=(1400, 850), port=8080, mode="edge")
-    except Exception:
+    if __name__ == "__main__":
+     print("SismoLab AVL - Iniciando...")
+    print("Cerrando la ventana se detiene el servidor.")
+
+    PORT = 8080
+    # Try browsers in order; fall back to a server-only mode if none is found.
+    for mode in ("chrome", "edge", "default"):
         try:
-            eel.start("index.html", size=(1400, 850), port=8080, mode="edge")
-        except Exception:
-            print("No se encontro Edge ni Chrome. Abriendo en el navegador por defecto...")
-            eel.start("index.html", size=(1400, 850), port=8080, mode="default")
+            eel.start("index.html", size=(1400, 850), port=PORT, mode=mode)
+            break
+        except (OSError, EnvironmentError, RuntimeError):
+            continue
+    else:
+        print(f"No se detecto navegador. Abre http://localhost:{PORT} manualmente.")
+        eel.start("index.html", port=PORT, mode=None)
