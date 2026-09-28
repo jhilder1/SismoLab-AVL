@@ -371,13 +371,9 @@ if __name__ == "__main__":
     print("SismoLab AVL - Iniciando...")
     print("Cerrando la ventana se detiene el servidor.")
 
-    # Intentar con Edge (viene con Windows), si no con el navegador por defecto
-    if __name__ == "__main__":
-     print("SismoLab AVL - Iniciando...")
-    print("Cerrando la ventana se detiene el servidor.")
-
     PORT = 8080
-    # Try browsers in order; fall back to a server-only mode if none is found.
+    # Intentar con Chrome, Edge o el navegador por defecto; si ninguno funciona,
+    # arrancar solo el servidor y mostrar la URL manualmente.
     for mode in ("chrome", "edge", "default"):
         try:
             eel.start("index.html", size=(1400, 850), port=PORT, mode=mode)
