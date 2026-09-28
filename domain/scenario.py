@@ -221,6 +221,20 @@ class Scenario:
         if not event:
             raise ValueError(f"Evento {event_id} no encontrado entre los activos")
 
+        mag_to_check = magnitude if magnitude is not None else event.magnitude
+        dep_to_check = depth_km if depth_km is not None else event.depth_km
+        ep_x_to_check = epicenter_x if epicenter_x is not None else event.epicenter.x
+        ep_y_to_check = epicenter_y if epicenter_y is not None else event.epicenter.y
+        time_to_check = occurrence_time if occurrence_time is not None else event.occurrence_time
+
+        errors = SeismicEvent.validate_data(
+            event_id, mag_to_check, dep_to_check,
+            ep_x_to_check, ep_y_to_check,
+            time_to_check, self.clock,
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
+
         before = self.snapshot()
         old_key = event.build_key()
 
@@ -290,7 +304,21 @@ class Scenario:
     # --- Encolar y procesar reportes ---
 
     def enqueue_report(self, report: Report):
+        errors = SeismicEvent.validate_data(
+            report.event_id, report.magnitude, report.depth_km,
+            report.epicenter.x, report.epicenter.y,
+            report.occurrence_time, self.clock,
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
+        if report.station_id not in self.stations:
+            raise ValueError(f"Estación '{report.station_id}' no existe en el escenario")
+        if report.revision < 1:
+            raise ValueError(f"La revisión debe ser >= 1, se recibió {report.revision}")
+            
+        before = self.snapshot()
         self.report_queue.enqueue(report)
+        self._record("ENQUEUE_REPORT", before, f"Encolar reporte {report.event_id} rev={report.revision}")
 
     def process_next_report(self) -> dict:
         if self._recovery_in_progress:
@@ -402,6 +430,7 @@ class Scenario:
                 self.event_index[report.event_id] = new_event
                 self.total_events_created += 1
                 self._calculate_association(report.event_id)
+                self.recalculate_all_associations()
                 result = {"result": "CREATED", "event_id": report.event_id}
             except ValueError as e:
                 self.total_reports_discarded += 1
@@ -415,7 +444,7 @@ class Scenario:
     # --- Asociaciones ---
 
     def _calculate_association(self, event_id: int) -> Optional[Association]:
-        event = self.get_event(event_id)
+        event = self.event_index.get(event_id) or self.archived.get(event_id)
         if not event:
             return None
 
@@ -465,24 +494,33 @@ class Scenario:
     def recalculate_all_associations(self):
         for event_id in list(self.event_index.keys()):
             self._calculate_association(event_id)
+        for event_id in list(self.archived.keys()):
+            self._calculate_association(event_id)
 
     # --- Archivo ---
 
     def find_eligible_branches(self) -> list[dict]:
         result = []
-        self._find_eligible(self.avl.root, result)
-        result.sort(key=lambda x: x["count"], reverse=True)
+        self._find_eligible(self.avl.root, 0, result)
+        # Desempates: 1. Mayor cantidad, 2. Mayor profundidad de raíz, 3. Mayor ID
+        result.sort(key=lambda x: (x["count"], x["root_depth"], x["root_id"]), reverse=True)
         return result
 
-    def _find_eligible(self, node, result: list):
+    def _find_eligible(self, node, current_depth: int, result: list):
         if not node:
             return
         ids = []
         if self._is_subtree_eligible(node, ids):
-            result.append({"root_key": node.key, "event_ids": ids, "count": len(ids)})
+            result.append({
+                "root_key": node.key, 
+                "event_ids": ids, 
+                "count": len(ids),
+                "root_depth": current_depth,
+                "root_id": node.event_id
+            })
         else:
-            self._find_eligible(node.left, result)
-            self._find_eligible(node.right, result)
+            self._find_eligible(node.left, current_depth + 1, result)
+            self._find_eligible(node.right, current_depth + 1, result)
 
     def _is_subtree_eligible(self, node, ids: list) -> bool:
         if not node:
@@ -493,7 +531,7 @@ class Scenario:
         if event.priority != Priority.LOW:
             return False
         age = self.clock - event.occurrence_time
-        if age < timedelta(hours=self.T_archive_hours):
+        if age <= timedelta(hours=self.T_archive_hours):
             return False
         ids.append(node.event_id)
         return (self._is_subtree_eligible(node.left, ids)
@@ -571,6 +609,7 @@ class Scenario:
         errors = list(tree_report["order"]) + list(tree_report["metadata"])
         errors += self._audit_unique_ids()
         errors += self._audit_index_consistency()
+        errors += self._audit_associations()
 
         unbalanced = tree_report["unbalanced"]
         if not self.avl.stress_mode:
@@ -605,6 +644,20 @@ class Scenario:
             errors.append(f"ID {eid} en AVL pero no en event_index")
         for eid in index_ids - avl_ids:
             errors.append(f"ID {eid} en event_index pero no en AVL")
+        return errors
+
+    def _audit_associations(self) -> list[str]:
+        errors = []
+        for event_id, event in self.event_index.items():
+            ref_id = event.reference_event_id
+            if ref_id is not None:
+                if ref_id not in self.event_index and ref_id not in self.archived:
+                    errors.append(f"Evento activo {event_id} referencia a ID inexistente/eliminado: {ref_id}")
+        for event_id, event in self.archived.items():
+            ref_id = event.reference_event_id
+            if ref_id is not None:
+                if ref_id not in self.event_index and ref_id not in self.archived:
+                    errors.append(f"Evento archivado {event_id} referencia a ID inexistente/eliminado: {ref_id}")
         return errors
 
     # --- Modo estrés ---
@@ -918,6 +971,7 @@ class Scenario:
             "reference": ref_info,
             "candidates": candidates_info,
             "replicas": replicas,
+            "nodes_examined": len(self.event_index) + len(self.archived),
         }
 
     def query_costly_high_priority(self) -> dict:

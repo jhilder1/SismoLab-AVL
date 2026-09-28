@@ -10,6 +10,7 @@ BSTTree   — BST sin balanceo (para comparación con AVL).
 
 from __future__ import annotations
 import math
+import collections
 from typing import Optional
 
 
@@ -64,27 +65,22 @@ class TreeKey:
     def __hash__(self) -> int:
         return hash(self.to_tuple())
 
-    # --- Display ---
     def __repr__(self) -> str:
-        return f"TreeKey(P={self.priority}, M={self.magnitude}, I={self.event_id})"
-
-    def __str__(self) -> str:
         return f"({self.priority}, {self.magnitude}, {self.event_id})"
-
-    # --- Serialización ---
-    def to_dict(self) -> dict:
-        return {"priority": self.priority, "magnitude": self.magnitude, "event_id": self.event_id}
 
     def to_list(self) -> list:
         return [self.priority, self.magnitude, self.event_id]
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TreeKey":
-        return cls(priority=data["priority"], magnitude=data["magnitude"], event_id=data["event_id"])
+    def from_list(cls, data: list) -> "TreeKey":
+        return cls(data[0], data[1], data[2])
+
+    def to_dict(self) -> dict:
+        return {"priority": self.priority, "magnitude": self.magnitude, "event_id": self.event_id}
 
     @classmethod
-    def from_list(cls, data: list) -> "TreeKey":
-        return cls(priority=data[0], magnitude=data[1], event_id=data[2])
+    def from_dict(cls, data: dict) -> "TreeKey":
+        return cls(data["priority"], data["magnitude"], data["event_id"])
 
 
 # =====================================================================
@@ -92,37 +88,34 @@ class TreeKey:
 # =====================================================================
 
 class AVLNode:
-    """Nodo del árbol AVL. Guarda una REFERENCIA al evento, nunca una copia."""
+    """Nodo del árbol AVL."""
 
-    __slots__ = ("key", "event", "event_id", "left", "right", "height")
+    __slots__ = ("event", "key", "event_id", "left", "right", "height")
 
-    def __init__(self, event) -> None:
+    def __init__(self, event):
         self.event = event
-        self.event_id: int = event.event_id
-        self.key: TreeKey = event.build_key()
+        self.key = event.build_key()
+        self.event_id = event.event_id
         self.left: Optional[AVLNode] = None
         self.right: Optional[AVLNode] = None
         self.height: int = 0
 
-    @property
-    def balance_factor(self) -> int:
-        left_h = self.left.height if self.left else -1
-        right_h = self.right.height if self.right else -1
-        return left_h - right_h
-
-    def update_height(self) -> None:
-        left_h = self.left.height if self.left else -1
-        right_h = self.right.height if self.right else -1
-        self.height = 1 + max(left_h, right_h)
-
     def adopt(self, other: "AVLNode") -> None:
-        """Copia payload de otro nodo (usado en eliminación con dos hijos)."""
-        self.key = other.key
+        """Copia el contenido físico, preservando la identidad del nodo en el árbol."""
         self.event = other.event
+        self.key = other.key
         self.event_id = other.event_id
 
-    def __repr__(self) -> str:
-        return f"AVLNode(key={self.key}, h={self.height})"
+    @property
+    def balance_factor(self) -> int:
+        hl = self.left.height if self.left else -1
+        hr = self.right.height if self.right else -1
+        return hl - hr
+
+    def update_height(self) -> None:
+        hl = self.left.height if self.left else -1
+        hr = self.right.height if self.right else -1
+        self.height = 1 + max(hl, hr)
 
 
 # =====================================================================
@@ -130,22 +123,19 @@ class AVLNode:
 # =====================================================================
 
 class AVLTree:
-    """Árbol AVL auto-balanceado con modo estrés y recuperación global."""
+    """Árbol AVL que indexa los eventos por su clave TreeKey."""
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.root: Optional[AVLNode] = None
         self.size = 0
         self.stress_mode = False
 
-        # Contadores de rotación (Sección 14)
         self.rotations_ll = 0
         self.rotations_rr = 0
         self.rotations_lr = 0
         self.rotations_rl = 0
         self.simple_turns_left = 0
         self.simple_turns_right = 0
-
-    # --- Altura y balance ---
 
     def get_height(self, node: Optional[AVLNode]) -> int:
         return node.height if node else -1
@@ -157,27 +147,50 @@ class AVLTree:
     def height(self) -> int:
         return self.get_height(self.root)
 
-    # --- Inserción ---
+    # --- Inserción (Iterativa) ---
 
     def insert(self, event) -> None:
-        self.root = self._insert(self.root, event, event.build_key())
-
-    def _insert(self, node: Optional[AVLNode], event, key: TreeKey) -> AVLNode:
-        if not node:
+        key = event.build_key()
+        if not self.root:
+            self.root = AVLNode(event)
             self.size += 1
-            return AVLNode(event)
+            return
 
-        if key < node.key:
-            node.left = self._insert(node.left, event, key)
-        elif key > node.key:
-            node.right = self._insert(node.right, event, key)
-        else:
-            return node
+        path = []
+        current = self.root
+        while current:
+            if key < current.key:
+                path.append((current, 'left'))
+                if current.left is None:
+                    current.left = AVLNode(event)
+                    self.size += 1
+                    break
+                current = current.left
+            elif key > current.key:
+                path.append((current, 'right'))
+                if current.right is None:
+                    current.right = AVLNode(event)
+                    self.size += 1
+                    break
+                current = current.right
+            else:
+                return  # Ya existe
 
-        node.update_height()
-        if self.stress_mode:
-            return node
-        return self._balance(node)
+        # Backtrack
+        while path:
+            node, _ = path.pop()
+            node.update_height()
+            if not self.stress_mode:
+                node = self._balance(node)
+            
+            if path:
+                parent, direction = path[-1]
+                if direction == 'left':
+                    parent.left = node
+                else:
+                    parent.right = node
+            else:
+                self.root = node
 
     # --- Balanceo ---
 
@@ -222,40 +235,72 @@ class AVLTree:
         y.update_height()
         return y
 
-    # --- Eliminación ---
+    # --- Eliminación (Iterativa) ---
 
     def delete(self, key: TreeKey) -> None:
-        self.root = self._delete(self.root, key)
+        if not self.root:
+            return
 
-    def _delete(self, node: Optional[AVLNode], key: TreeKey) -> Optional[AVLNode]:
-        if not node:
-            return None
+        path = []
+        current = self.root
+        while current:
+            if key < current.key:
+                path.append((current, 'left'))
+                current = current.left
+            elif key > current.key:
+                path.append((current, 'right'))
+                current = current.right
+            else:
+                break
+        
+        if not current:
+            return
 
-        if key < node.key:
-            node.left = self._delete(node.left, key)
-        elif key > node.key:
-            node.right = self._delete(node.right, key)
+        if not current.left or not current.right:
+            sub = current.right if not current.left else current.left
+            self.size -= 1
+            if path:
+                parent, direction = path[-1]
+                if direction == 'left':
+                    parent.left = sub
+                else:
+                    parent.right = sub
+            else:
+                self.root = sub
         else:
-            if not node.left:
-                self.size -= 1
-                return node.right
-            if not node.right:
-                self.size -= 1
-                return node.left
-            successor = self._get_min_value_node(node.right)
-            node.adopt(successor)
-            node.right = self._delete(node.right, successor.key)
+            path.append((current, 'right'))
+            succ_parent = current
+            succ = current.right
+            succ_path = []
+            while succ.left:
+                succ_path.append((succ, 'left'))
+                succ_parent = succ
+                succ = succ.left
+            
+            current.adopt(succ)
+            self.size -= 1
+            
+            if succ_path:
+                succ_parent.left = succ.right
+            else:
+                current.right = succ.right
+                
+            path.extend(succ_path)
 
-        node.update_height()
-        if self.stress_mode:
-            return node
-        return self._balance(node)
-
-    def _get_min_value_node(self, node: AVLNode) -> AVLNode:
-        current = node
-        while current.left is not None:
-            current = current.left
-        return current
+        while path:
+            node, _ = path.pop()
+            node.update_height()
+            if not self.stress_mode:
+                node = self._balance(node)
+                
+            if path:
+                parent, direction = path[-1]
+                if direction == 'left':
+                    parent.left = node
+                else:
+                    parent.right = node
+            else:
+                self.root = node
 
     # --- Búsqueda ---
 
@@ -278,7 +323,7 @@ class AVLTree:
         node, visited = self.search(key)
         return None if node is None else visited - 1
 
-    # --- Recuperación de balance (Sección 8) ---
+    # --- Recuperación de balance (Sección 8, Iterativa) ---
 
     def recover_balance(self) -> dict:
         before = {
@@ -286,8 +331,10 @@ class AVLTree:
             "lr": self.rotations_lr, "rl": self.rotations_rl,
             "left": self.simple_turns_left, "right": self.simple_turns_right,
         }
-        self.root = self._recover_balance_recursive(self.root)
+        
+        self._recover_balance_iterative()
         self.stress_mode = False
+        
         return {
             "ll": self.rotations_ll - before["ll"],
             "rr": self.rotations_rr - before["rr"],
@@ -298,76 +345,110 @@ class AVLTree:
             "final_height": self.height,
         }
 
-    def _recover_balance_recursive(self, node: Optional[AVLNode]) -> Optional[AVLNode]:
-        if not node:
-            return None
-        node.left = self._recover_balance_recursive(node.left)
-        node.right = self._recover_balance_recursive(node.right)
-        node.update_height()
-        while abs(self.get_balance(node)) > 1:
-            node = self._balance(node)
-            node.left = self._recover_balance_recursive(node.left)
-            node.right = self._recover_balance_recursive(node.right)
-            node.update_height()
-        return node
+    def _recover_balance_iterative(self) -> None:
+        if not self.root:
+            return
 
-    # --- Recorridos ---
+        stack = [(self.root, None, None, 0)]
+        while stack:
+            node, parent, direction, state = stack.pop()
+            if not node:
+                continue
+                
+            if state == 0:
+                stack.append((node, parent, direction, 1))
+                if node.left:
+                    stack.append((node.left, node, 'left', 0))
+            elif state == 1:
+                stack.append((node, parent, direction, 2))
+                if node.right:
+                    stack.append((node.right, node, 'right', 0))
+            elif state == 2:
+                node.update_height()
+                changed = False
+                while abs(self.get_balance(node)) > 1:
+                    node = self._balance(node)
+                    changed = True
+                
+                if changed:
+                    stack.append((node, parent, direction, 0))
+                else:
+                    if parent:
+                        if direction == 'left':
+                            parent.left = node
+                        else:
+                            parent.right = node
+                    else:
+                        self.root = node
+
+    # --- Recorridos (Iterativos) ---
 
     def inorder(self) -> list[TreeKey]:
         result = []
-        self._inorder(self.root, result)
+        stack = []
+        current = self.root
+        while stack or current:
+            if current:
+                stack.append(current)
+                current = current.left
+            else:
+                current = stack.pop()
+                result.append(current.key)
+                current = current.right
         return result
-
-    def _inorder(self, node: Optional[AVLNode], result: list):
-        if not node:
-            return
-        self._inorder(node.left, result)
-        result.append(node.key)
-        self._inorder(node.right, result)
 
     def inorder_reverse(self) -> list[TreeKey]:
         result = []
-        self._inorder_reverse(self.root, result)
+        stack = []
+        current = self.root
+        while stack or current:
+            if current:
+                stack.append(current)
+                current = current.right
+            else:
+                current = stack.pop()
+                result.append(current.key)
+                current = current.left
         return result
-
-    def _inorder_reverse(self, node: Optional[AVLNode], result: list):
-        if not node:
-            return
-        self._inorder_reverse(node.right, result)
-        result.append(node.key)
-        self._inorder_reverse(node.left, result)
 
     def preorder(self) -> list[TreeKey]:
+        if not self.root:
+            return []
         result = []
-        self._preorder(self.root, result)
+        stack = [self.root]
+        while stack:
+            current = stack.pop()
+            result.append(current.key)
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
         return result
-
-    def _preorder(self, node: Optional[AVLNode], result: list):
-        if not node:
-            return
-        result.append(node.key)
-        self._preorder(node.left, result)
-        self._preorder(node.right, result)
 
     def postorder(self) -> list[TreeKey]:
+        if not self.root:
+            return []
         result = []
-        self._postorder(self.root, result)
+        stack = [(self.root, False)]
+        while stack:
+            current, visited = stack.pop()
+            if visited:
+                result.append(current.key)
+            else:
+                stack.append((current, True))
+                if current.right:
+                    stack.append((current.right, False))
+                if current.left:
+                    stack.append((current.left, False))
         return result
-
-    def _postorder(self, node: Optional[AVLNode], result: list):
-        if not node:
-            return
-        self._postorder(node.left, result)
-        self._postorder(node.right, result)
-        result.append(node.key)
 
     def level_order(self) -> list[TreeKey]:
         if not self.root:
             return []
         result = []
-        queue = [self.root]
+        queue = collections.deque([self.root])
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             result.append(current.key)
             if current.left:
                 queue.append(current.left)
@@ -377,30 +458,45 @@ class AVLTree:
 
     def get_all_event_ids(self) -> list[int]:
         result = []
-        self._collect_ids(self.root, result)
+        stack = []
+        current = self.root
+        while stack or current:
+            if current:
+                stack.append(current)
+                current = current.left
+            else:
+                current = stack.pop()
+                result.append(current.event_id)
+                current = current.right
         return result
-
-    def _collect_ids(self, node: Optional[AVLNode], result: list):
-        if not node:
-            return
-        self._collect_ids(node.left, result)
-        result.append(node.event_id)
-        self._collect_ids(node.right, result)
 
     def collect_subtree_ids(self, node: Optional[AVLNode]) -> list[int]:
         result = []
-        self._collect_ids(node, result)
+        stack = []
+        current = node
+        while stack or current:
+            if current:
+                stack.append(current)
+                current = current.left
+            else:
+                current = stack.pop()
+                result.append(current.event_id)
+                current = current.right
         return result
 
     def is_balanced(self) -> bool:
-        return self._check_balanced(self.root)
-
-    def _check_balanced(self, node: Optional[AVLNode]) -> bool:
-        if not node:
+        if not self.root:
             return True
-        if abs(self.get_balance(node)) > 1:
-            return False
-        return self._check_balanced(node.left) and self._check_balanced(node.right)
+        stack = [self.root]
+        while stack:
+            current = stack.pop()
+            if abs(self.get_balance(current)) > 1:
+                return False
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
+        return True
 
     def reset_rotation_counts(self):
         self.rotations_ll = 0
@@ -412,32 +508,49 @@ class AVLTree:
         return self.rotations_ll + self.rotations_rr + self.rotations_lr + self.rotations_rl
 
     def count_leaves(self) -> int:
-        return self._count_leaves(self.root)
-
-    def _count_leaves(self, node) -> int:
-        if not node:
+        if not self.root:
             return 0
-        if not node.left and not node.right:
-            return 1
-        return self._count_leaves(node.left) + self._count_leaves(node.right)
+        count = 0
+        stack = [self.root]
+        while stack:
+            current = stack.pop()
+            if not current.left and not current.right:
+                count += 1
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
+        return count
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Optional[dict]:
         """Serializa el árbol completo a JSON (para dibujar en el front)."""
-        return self._node_to_dict(self.root)
-
-    def _node_to_dict(self, node: Optional[AVLNode]) -> Optional[dict]:
-        if not node:
+        if not self.root:
             return None
-        return {
-            "key": str(node.key),
-            "event_id": node.event_id,
-            "priority": node.key.priority,
-            "magnitude": node.key.magnitude,
-            "height": node.height,
-            "bf": node.balance_factor,
-            "left": self._node_to_dict(node.left),
-            "right": self._node_to_dict(node.right),
-        }
+        dicts = {}
+        stack = [(self.root, False)]
+        while stack:
+            current, visited = stack.pop()
+            if visited:
+                left_dict = dicts.get(id(current.left)) if current.left else None
+                right_dict = dicts.get(id(current.right)) if current.right else None
+                d = {
+                    "key": str(current.key),
+                    "event_id": current.event_id,
+                    "priority": current.key.priority,
+                    "magnitude": current.key.magnitude,
+                    "height": current.height,
+                    "bf": current.balance_factor,
+                    "left": left_dict,
+                    "right": right_dict,
+                }
+                dicts[id(current)] = d
+            else:
+                stack.append((current, True))
+                if current.right:
+                    stack.append((current.right, False))
+                if current.left:
+                    stack.append((current.left, False))
+        return dicts[id(self.root)]
 
 
 # =====================================================================
@@ -468,63 +581,111 @@ class BSTTree:
     def get_height(self, node: Optional[BSTNode]) -> int:
         if not node:
             return -1
-        return 1 + max(self.get_height(node.left), self.get_height(node.right))
+        heights = {}
+        stack = [(node, False)]
+        while stack:
+            curr, visited = stack.pop()
+            if visited:
+                left_h = heights.get(id(curr.left), -1) if curr.left else -1
+                right_h = heights.get(id(curr.right), -1) if curr.right else -1
+                heights[id(curr)] = 1 + max(left_h, right_h)
+            else:
+                stack.append((curr, True))
+                if curr.right:
+                    stack.append((curr.right, False))
+                if curr.left:
+                    stack.append((curr.left, False))
+        return heights[id(node)]
 
     @property
     def height(self) -> int:
         return self.get_height(self.root)
 
     def count_leaves(self) -> int:
-        return self._count_leaves(self.root)
-
-    def _count_leaves(self, node: Optional[BSTNode]) -> int:
-        if not node:
+        if not self.root:
             return 0
-        if not node.left and not node.right:
-            return 1
-        return self._count_leaves(node.left) + self._count_leaves(node.right)
+        count = 0
+        stack = [self.root]
+        while stack:
+            current = stack.pop()
+            if not current.left and not current.right:
+                count += 1
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
+        return count
 
     def insert(self, key: TreeKey):
-        self.root = self._insert(self.root, key)
-
-    def _insert(self, node: Optional[BSTNode], key: TreeKey) -> BSTNode:
-        if not node:
+        if not self.root:
+            self.root = BSTNode(key)
             self.size += 1
-            return BSTNode(key)
-        if key < node.key:
-            node.left = self._insert(node.left, key)
-        elif key > node.key:
-            node.right = self._insert(node.right, key)
-        return node
+            return
+            
+        current = self.root
+        while current:
+            if key < current.key:
+                if current.left is None:
+                    current.left = BSTNode(key)
+                    self.size += 1
+                    break
+                current = current.left
+            elif key > current.key:
+                if current.right is None:
+                    current.right = BSTNode(key)
+                    self.size += 1
+                    break
+                current = current.right
+            else:
+                return
 
     def delete(self, key: TreeKey):
-        self.root = self._delete(self.root, key)
+        if not self.root:
+            return
 
-    def _delete(self, node: Optional[BSTNode], key: TreeKey) -> Optional[BSTNode]:
-        if not node:
-            return node
-        if key < node.key:
-            node.left = self._delete(node.left, key)
-        elif key > node.key:
-            node.right = self._delete(node.right, key)
+        path = []
+        current = self.root
+        while current:
+            if key < current.key:
+                path.append((current, 'left'))
+                current = current.left
+            elif key > current.key:
+                path.append((current, 'right'))
+                current = current.right
+            else:
+                break
+                
+        if not current:
+            return
+
+        if not current.left or not current.right:
+            sub = current.right if not current.left else current.left
+            self.size -= 1
+            if path:
+                parent, direction = path[-1]
+                if direction == 'left':
+                    parent.left = sub
+                else:
+                    parent.right = sub
+            else:
+                self.root = sub
         else:
-            if not node.left:
-                self.size -= 1
-                return node.right
-            elif not node.right:
-                self.size -= 1
-                return node.left
-            temp = self._get_min_value_node(node.right)
-            node.key = temp.key
-            node.event_id = temp.event_id
-            node.right = self._delete(node.right, temp.key)
-        return node
-
-    def _get_min_value_node(self, node: BSTNode) -> BSTNode:
-        current = node
-        while current.left is not None:
-            current = current.left
-        return current
+            succ_parent = current
+            succ = current.right
+            is_right_child = True
+            while succ.left:
+                succ_parent = succ
+                succ = succ.left
+                is_right_child = False
+                
+            current.key = succ.key
+            current.event_id = succ.event_id
+            self.size -= 1
+            
+            if is_right_child:
+                succ_parent.right = succ.right
+            else:
+                succ_parent.left = succ.right
 
     def search(self, key: TreeKey) -> tuple[Optional[BSTNode], int]:
         """Busca en el BST. Retorna (nodo, comparaciones)."""
@@ -539,47 +700,56 @@ class BSTTree:
 
     def inorder(self) -> list[TreeKey]:
         result = []
-        self._inorder(self.root, result)
+        stack = []
+        current = self.root
+        while stack or current:
+            if current:
+                stack.append(current)
+                current = current.left
+            else:
+                current = stack.pop()
+                result.append(current.key)
+                current = current.right
         return result
-
-    def _inorder(self, node: Optional[BSTNode], result: list):
-        if not node:
-            return
-        self._inorder(node.left, result)
-        result.append(node.key)
-        self._inorder(node.right, result)
 
     def preorder(self) -> list[TreeKey]:
+        if not self.root:
+            return []
         result = []
-        self._preorder(self.root, result)
+        stack = [self.root]
+        while stack:
+            current = stack.pop()
+            result.append(current.key)
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
         return result
-
-    def _preorder(self, node: Optional[BSTNode], result: list):
-        if not node:
-            return
-        result.append(node.key)
-        self._preorder(node.left, result)
-        self._preorder(node.right, result)
 
     def postorder(self) -> list[TreeKey]:
+        if not self.root:
+            return []
         result = []
-        self._postorder(self.root, result)
+        stack = [(self.root, False)]
+        while stack:
+            current, visited = stack.pop()
+            if visited:
+                result.append(current.key)
+            else:
+                stack.append((current, True))
+                if current.right:
+                    stack.append((current.right, False))
+                if current.left:
+                    stack.append((current.left, False))
         return result
-
-    def _postorder(self, node: Optional[BSTNode], result: list):
-        if not node:
-            return
-        self._postorder(node.left, result)
-        self._postorder(node.right, result)
-        result.append(node.key)
 
     def level_order(self) -> list[TreeKey]:
         if not self.root:
             return []
         result = []
-        queue = [self.root]
+        queue = collections.deque([self.root])
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             result.append(current.key)
             if current.left:
                 queue.append(current.left)
@@ -588,20 +758,33 @@ class BSTTree:
         return result
 
     def to_dict(self) -> Optional[dict]:
-        return self._node_to_dict(self.root)
-
-    def _node_to_dict(self, node: Optional[BSTNode]) -> Optional[dict]:
-        if not node:
+        if not self.root:
             return None
-        return {
-            "key": str(node.key),
-            "event_id": node.event_id,
-            "priority": node.key.priority,
-            "magnitude": node.key.magnitude,
-            "height": self.get_height(node),
-            "left": self._node_to_dict(node.left),
-            "right": self._node_to_dict(node.right),
-        }
+        dicts = {}
+        stack = [(self.root, False)]
+        while stack:
+            current, visited = stack.pop()
+            if visited:
+                left_dict = dicts.get(id(current.left)) if current.left else None
+                right_dict = dicts.get(id(current.right)) if current.right else None
+                d = {
+                    "key": str(current.key),
+                    "event_id": current.event_id,
+                    "priority": current.key.priority,
+                    "magnitude": current.key.magnitude,
+                    "height": 1 + max(left_dict["height"] if left_dict else -1, 
+                                      right_dict["height"] if right_dict else -1),
+                    "left": left_dict,
+                    "right": right_dict,
+                }
+                dicts[id(current)] = d
+            else:
+                stack.append((current, True))
+                if current.right:
+                    stack.append((current.right, False))
+                if current.left:
+                    stack.append((current.left, False))
+        return dicts[id(self.root)]
 
 
 # =====================================================================
@@ -658,4 +841,3 @@ def compare_trees(keys: list[TreeKey]) -> dict:
             "tree": bst.to_dict(),
         },
     }
-

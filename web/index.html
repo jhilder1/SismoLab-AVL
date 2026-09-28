@@ -179,6 +179,7 @@
                     <button id="tab-map" onclick="showTree('map')" class="btn btn-sm tab">Plano geografico</button>
                     <button id="tab-queries" onclick="showTree('queries')" class="btn btn-sm tab">Consultas</button>
                     <button id="tab-queue" onclick="showTree('queue')" class="btn btn-sm tab">Cola</button>
+                    <button id="tab-history" onclick="showTree('history')" class="btn btn-sm tab">Histórico</button>
                 </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
@@ -260,6 +261,10 @@
 
                     <h4>Historial de decisiones</h4>
                     <div id="queue-history"></div>
+                </div>
+
+                <div id="history-panel" class="history-panel" style="display:none">
+                    <div id="archived-list" class="archived-list" style="padding: 1rem;"></div>
                 </div>
 
                 <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>

@@ -40,6 +40,7 @@ async function refresh() {
         updateStats(state);
         drawCurrentTree();
         updateEvents(state.events);
+        renderArchived(state.archived);
         renderQueue(state.queued_reports);
         updateStress(state.stress_mode);
         $("clock").textContent = state.clock.replace("T", " ");
@@ -120,6 +121,31 @@ function updateEvents(events) {
             <div class="ev-id">SIS-${String(e.event_id).padStart(6, "0")}</div>
             <div class="ev-detail">M=${e.magnitude} | P=${pName} | Prof=${e.depth_km}km | Rev=${e.revision}</div>
             <div class="ev-detail">Epi=(${e.epicenter.x}, ${e.epicenter.y}) | ${e.attention_state}</div>
+            <button class="btn btn-sm" onclick="window.markReviewed(${e.event_id})" style="margin-top: 5px; width: 100%;">Marcar Revisado</button>
+        </div>`;
+    }).join("");
+}
+
+window.markReviewed = async function(id) {
+    const res = await eel.mark_reviewed(id)();
+    log(res.message, res.ok ? "info" : "error");
+    if (res.ok) refresh();
+};
+
+function renderArchived(archived) {
+    const list = $("archived-list");
+    if (!archived || archived.length === 0) {
+        list.innerHTML = '<p class="muted">Sin eventos archivados.</p>';
+        return;
+    }
+    // Orden descendente por id
+    archived.sort((a, b) => b.event_id - a.event_id);
+    list.innerHTML = archived.map(e => {
+        const pClass = "p" + e.priority;
+        const pName = ["", "LOW", "MED", "HIGH"][e.priority];
+        return `<div class="event-card ${pClass}">
+            <div class="ev-id">SIS-${String(e.event_id).padStart(6, "0")} (Archivado)</div>
+            <div class="ev-detail">M=${e.magnitude} | P=${pName} | Prof=${e.depth_km}km</div>
         </div>`;
     }).join("");
 }
@@ -135,6 +161,7 @@ function showTree(view) {
     $("tab-map").classList.toggle("active", view === "map");
     $("tab-queries").classList.toggle("active", view === "queries");
     $("tab-queue").classList.toggle("active", view === "queue");
+    $("tab-history").classList.toggle("active", view === "history");
     drawCurrentTree();
 }
 
@@ -143,11 +170,13 @@ function drawCurrentTree() {
     const isMap = treeView === "map";
     const isQueries = treeView === "queries";
     const isQueue = treeView === "queue";
-    $("tree-svg").style.display = (!isMap && !isQueries && !isQueue) ? "block" : "none";
+    const isHistory = treeView === "history";
+    $("tree-svg").style.display = (!isMap && !isQueries && !isQueue && !isHistory) ? "block" : "none";
     $("map-svg").style.display = isMap ? "block" : "none";
     $("map-legend").style.display = isMap ? "flex" : "none";
     $("queries-panel").style.display = isQueries ? "flex" : "none";
     $("queue-panel").style.display = isQueue ? "flex" : "none";
+    $("history-panel").style.display = isHistory ? "flex" : "none";
     $("tree-empty").style.display = "none";
 
     if (isQueue) {
@@ -156,6 +185,10 @@ function drawCurrentTree() {
         // processed step); this tab only needs its own header text.
         const n = (lastState.queued_reports || []).length;
         $("tree-root").textContent = `Cola FIFO de reportes | ${n} pendiente(s)`;
+        return;
+    }
+    if (isHistory) {
+        $("tree-root").textContent = `Histórico | ${(lastState.archived || []).length} archivados`;
         return;
     }
     if (isQueries) {
