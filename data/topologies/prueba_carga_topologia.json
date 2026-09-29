@@ -1,0 +1,1039 @@
+{
+  "format": "sismolab-scenario",
+  "schema_version": 1,
+  "clock": "2026-06-30T23:59:00Z",
+  "mode": "normal",
+  "parameters": {
+    "W_hours": 48.0,
+    "R_km": 40.0,
+    "L_depth": 3,
+    "T_archive_hours": 72.0
+  },
+  "zones": [
+    {
+      "name": "Norte",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 500,
+      "y_max": 1000,
+      "is_populated": true
+    },
+    {
+      "name": "Centro",
+      "x_min": 200,
+      "x_max": 800,
+      "y_min": 200,
+      "y_max": 800,
+      "is_populated": true
+    },
+    {
+      "name": "Sur",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": false
+    },
+    {
+      "name": "Costa",
+      "x_min": 500,
+      "x_max": 1000,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": true
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "EST-001",
+      "name": "Estacion Norte"
+    },
+    {
+      "station_id": "EST-002",
+      "name": "Estacion Centro"
+    },
+    {
+      "station_id": "EST-003",
+      "name": "Estacion Sur"
+    },
+    {
+      "station_id": "EST-004",
+      "name": "Estacion Costa"
+    }
+  ],
+  "active_tree": {
+    "root": 1003,
+    "nodes": [
+      {
+        "event_id": 1003,
+        "left": 1008,
+        "right": 1002,
+        "key": [
+          3,
+          4.8,
+          1003
+        ],
+        "height": 4,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1003,
+          "magnitude": 4.8,
+          "depth_km": 22.0,
+          "epicenter": {
+            "x": 400.0,
+            "y": 550.0
+          },
+          "occurrence_time": "2026-06-03T09:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1008,
+        "left": 1004,
+        "right": 1011,
+        "key": [
+          1,
+          3.8,
+          1008
+        ],
+        "height": 3,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1008,
+          "magnitude": 3.8,
+          "depth_km": 35.0,
+          "epicenter": {
+            "x": 800.0,
+            "y": 450.0
+          },
+          "occurrence_time": "2026-06-08T18:55:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1004,
+        "left": 1012,
+        "right": 1015,
+        "key": [
+          1,
+          3.2,
+          1004
+        ],
+        "height": 2,
+        "balance_factor": 1,
+        "event": {
+          "event_id": 1004,
+          "magnitude": 3.2,
+          "depth_km": 8.0,
+          "epicenter": {
+            "x": 150.0,
+            "y": 200.0
+          },
+          "occurrence_time": "2026-06-04T11:45:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-003"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": false,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1012,
+        "left": null,
+        "right": 1018,
+        "key": [
+          1,
+          2.9,
+          1012
+        ],
+        "height": 1,
+        "balance_factor": -1,
+        "event": {
+          "event_id": 1012,
+          "magnitude": 2.9,
+          "depth_km": 12.0,
+          "epicenter": {
+            "x": 100.0,
+            "y": 400.0
+          },
+          "occurrence_time": "2026-06-12T06:15:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-003"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": false,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1018,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          3.0,
+          1018
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1018,
+          "magnitude": 3.0,
+          "depth_km": 90.0,
+          "epicenter": {
+            "x": 900.0,
+            "y": 100.0
+          },
+          "occurrence_time": "2026-06-18T17:10:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1015,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          3.5,
+          1015
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1015,
+          "magnitude": 3.5,
+          "depth_km": 65.0,
+          "epicenter": {
+            "x": 200.0,
+            "y": 100.0
+          },
+          "occurrence_time": "2026-06-15T22:30:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-003"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": false,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1011,
+        "left": 1020,
+        "right": 1016,
+        "key": [
+          3,
+          4.5,
+          1011
+        ],
+        "height": 2,
+        "balance_factor": 1,
+        "event": {
+          "event_id": 1011,
+          "magnitude": 4.5,
+          "depth_km": 30.0,
+          "epicenter": {
+            "x": 680.0,
+            "y": 250.0
+          },
+          "occurrence_time": "2026-06-11T10:30:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1020,
+        "left": 1007,
+        "right": 1019,
+        "key": [
+          1,
+          4.3,
+          1020
+        ],
+        "height": 1,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1020,
+          "magnitude": 4.3,
+          "depth_km": 16.0,
+          "epicenter": {
+            "x": 620.0,
+            "y": 380.0
+          },
+          "occurrence_time": "2026-06-20T13:50:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1007,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          4.1,
+          1007
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1007,
+          "magnitude": 4.1,
+          "depth_km": 50.0,
+          "epicenter": {
+            "x": 250.0,
+            "y": 750.0
+          },
+          "occurrence_time": "2026-06-07T12:10:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 1,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1019,
+        "left": null,
+        "right": null,
+        "key": [
+          2,
+          5.7,
+          1019
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1019,
+          "magnitude": 5.7,
+          "depth_km": 33.0,
+          "epicenter": {
+            "x": 470.0,
+            "y": 470.0
+          },
+          "occurrence_time": "2026-06-19T08:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-002"
+          ],
+          "priority": 2,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1016,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          4.6,
+          1016
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1016,
+          "magnitude": 4.6,
+          "depth_km": 27.0,
+          "epicenter": {
+            "x": 390.0,
+            "y": 580.0
+          },
+          "occurrence_time": "2026-06-16T11:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-002"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1002,
+        "left": 1009,
+        "right": 1001,
+        "key": [
+          3,
+          6.5,
+          1002
+        ],
+        "height": 3,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1002,
+          "magnitude": 6.5,
+          "depth_km": 25.0,
+          "epicenter": {
+            "x": 480.0,
+            "y": 590.0
+          },
+          "occurrence_time": "2026-06-02T14:30:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-002"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1009,
+        "left": 1005,
+        "right": 1013,
+        "key": [
+          3,
+          5.9,
+          1009
+        ],
+        "height": 2,
+        "balance_factor": 1,
+        "event": {
+          "event_id": 1009,
+          "magnitude": 5.9,
+          "depth_km": 18.0,
+          "epicenter": {
+            "x": 510.0,
+            "y": 510.0
+          },
+          "occurrence_time": "2026-06-09T03:40:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-002"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1005,
+        "left": 1014,
+        "right": null,
+        "key": [
+          3,
+          5.5,
+          1005
+        ],
+        "height": 1,
+        "balance_factor": 1,
+        "event": {
+          "event_id": 1005,
+          "magnitude": 5.5,
+          "depth_km": 28.0,
+          "epicenter": {
+            "x": 720.0,
+            "y": 180.0
+          },
+          "occurrence_time": "2026-06-05T16:20:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1014,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          5.1,
+          1014
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1014,
+          "magnitude": 5.1,
+          "depth_km": 20.0,
+          "epicenter": {
+            "x": 560.0,
+            "y": 640.0
+          },
+          "occurrence_time": "2026-06-14T09:45:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1013,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          6.2,
+          1013
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1013,
+          "magnitude": 6.2,
+          "depth_km": 42.0,
+          "epicenter": {
+            "x": 450.0,
+            "y": 450.0
+          },
+          "occurrence_time": "2026-06-13T14:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-002"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1001,
+        "left": 1006,
+        "right": 1010,
+        "key": [
+          3,
+          7.2,
+          1001
+        ],
+        "height": 2,
+        "balance_factor": -1,
+        "event": {
+          "event_id": 1001,
+          "magnitude": 7.2,
+          "depth_km": 15.0,
+          "epicenter": {
+            "x": 350.0,
+            "y": 620.0
+          },
+          "occurrence_time": "2026-06-01T08:15:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1006,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          6.9,
+          1006
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1006,
+          "magnitude": 6.9,
+          "depth_km": 10.0,
+          "epicenter": {
+            "x": 600.0,
+            "y": 300.0
+          },
+          "occurrence_time": "2026-06-06T07:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-004"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1010,
+        "left": null,
+        "right": 1017,
+        "key": [
+          3,
+          7.8,
+          1010
+        ],
+        "height": 1,
+        "balance_factor": -1,
+        "event": {
+          "event_id": 1010,
+          "magnitude": 7.8,
+          "depth_km": 5.0,
+          "epicenter": {
+            "x": 300.0,
+            "y": 700.0
+          },
+          "occurrence_time": "2026-06-10T21:00:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      },
+      {
+        "event_id": 1017,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          8.1,
+          1017
+        ],
+        "height": 0,
+        "balance_factor": 0,
+        "event": {
+          "event_id": 1017,
+          "magnitude": 8.1,
+          "depth_km": 8.0,
+          "epicenter": {
+            "x": 330.0,
+            "y": 660.0
+          },
+          "occurrence_time": "2026-06-17T04:20:00Z",
+          "revision": 1,
+          "reporting_stations": [
+            "EST-001"
+          ],
+          "priority": 3,
+          "attention_state": "pending",
+          "status": "active",
+          "in_populated_zone": true,
+          "reference_event_id": null
+        }
+      }
+    ]
+  },
+  "bst": {
+    "root": 1001,
+    "nodes": [
+      {
+        "event_id": 1001,
+        "left": 1002,
+        "right": 1010,
+        "key": [
+          3,
+          7.2,
+          1001
+        ]
+      },
+      {
+        "event_id": 1002,
+        "left": 1003,
+        "right": 1006,
+        "key": [
+          3,
+          6.5,
+          1002
+        ]
+      },
+      {
+        "event_id": 1003,
+        "left": 1004,
+        "right": 1005,
+        "key": [
+          3,
+          4.8,
+          1003
+        ]
+      },
+      {
+        "event_id": 1004,
+        "left": 1012,
+        "right": 1007,
+        "key": [
+          1,
+          3.2,
+          1004
+        ]
+      },
+      {
+        "event_id": 1012,
+        "left": null,
+        "right": 1018,
+        "key": [
+          1,
+          2.9,
+          1012
+        ]
+      },
+      {
+        "event_id": 1018,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          3.0,
+          1018
+        ]
+      },
+      {
+        "event_id": 1007,
+        "left": 1008,
+        "right": 1011,
+        "key": [
+          1,
+          4.1,
+          1007
+        ]
+      },
+      {
+        "event_id": 1008,
+        "left": 1015,
+        "right": null,
+        "key": [
+          1,
+          3.8,
+          1008
+        ]
+      },
+      {
+        "event_id": 1015,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          3.5,
+          1015
+        ]
+      },
+      {
+        "event_id": 1011,
+        "left": 1019,
+        "right": 1016,
+        "key": [
+          3,
+          4.5,
+          1011
+        ]
+      },
+      {
+        "event_id": 1019,
+        "left": 1020,
+        "right": null,
+        "key": [
+          2,
+          5.7,
+          1019
+        ]
+      },
+      {
+        "event_id": 1020,
+        "left": null,
+        "right": null,
+        "key": [
+          1,
+          4.3,
+          1020
+        ]
+      },
+      {
+        "event_id": 1016,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          4.6,
+          1016
+        ]
+      },
+      {
+        "event_id": 1005,
+        "left": 1014,
+        "right": 1009,
+        "key": [
+          3,
+          5.5,
+          1005
+        ]
+      },
+      {
+        "event_id": 1014,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          5.1,
+          1014
+        ]
+      },
+      {
+        "event_id": 1009,
+        "left": null,
+        "right": 1013,
+        "key": [
+          3,
+          5.9,
+          1009
+        ]
+      },
+      {
+        "event_id": 1013,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          6.2,
+          1013
+        ]
+      },
+      {
+        "event_id": 1006,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          6.9,
+          1006
+        ]
+      },
+      {
+        "event_id": 1010,
+        "left": null,
+        "right": 1017,
+        "key": [
+          3,
+          7.8,
+          1010
+        ]
+      },
+      {
+        "event_id": 1017,
+        "left": null,
+        "right": null,
+        "key": [
+          3,
+          8.1,
+          1017
+        ]
+      }
+    ]
+  },
+  "archived": [],
+  "deleted_ids": [],
+  "associations": [
+    {
+      "event_id": 1001,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1002,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1003,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1004,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1005,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1006,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1007,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1008,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1009,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1010,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1011,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1012,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1013,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1014,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1015,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1016,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1017,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1018,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1019,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    },
+    {
+      "event_id": 1020,
+      "reference_id": null,
+      "candidates": [],
+      "selection_info": ""
+    }
+  ],
+  "queue": {
+    "reports": [],
+    "total_enqueued": 0
+  },
+  "metrics": {
+    "events_created": 20,
+    "reports_processed": 0,
+    "corrections": 0,
+    "archives": 0,
+    "reports_discarded": 0,
+    "conflicts": 0,
+    "confirmations": 0,
+    "rotations": {
+      "ll": 2,
+      "rr": 2,
+      "lr": 0,
+      "rl": 2,
+      "simple_left": 4,
+      "simple_right": 4
+    }
+  }
+}

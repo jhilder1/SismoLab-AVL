@@ -645,12 +645,70 @@ async function advanceClock() {
     refresh();
 }
 
-async function archiveEligible() {
-    const res = await eel.archive_eligible()();
-    if (res.result === "ARCHIVED") {
-        log(`Archivados ${res.count} eventos: ${res.event_ids}`, "ok");
+// Muestra las ramas elegibles para que el usuario elija cuál archivar (Sección 10)
+async function showEligibleBranches() {
+    const panel = $("eligible-branches-panel");
+    const list  = $("eligible-branches-list");
+    const btn   = $("btn-show-branches");
+
+    // Toggle: si ya está abierto, lo cierra
+    if (panel.style.display !== "none") {
+        panel.style.display = "none";
+        btn.textContent = "Consultar ramas elegibles";
+        return;
+    }
+
+    btn.textContent = "Cargando…";
+    const res = await eel.get_eligible_branches()();
+    btn.textContent = "Consultar ramas elegibles";
+
+    if (!res.ok) {
+        log(res.message || "Error al consultar ramas", "err");
+        return;
+    }
+
+    if (res.branches.length === 0) {
+        list.innerHTML = `<p class="muted" style="font-size:0.78rem; padding:0.4rem 0;">
+            Sin ramas elegibles. Las ramas deben ser de prioridad BAJA y antigüedad &gt; T horas.
+        </p>`;
     } else {
-        log(res.message || "No hay ramas elegibles para archivar", "info");
+        list.innerHTML = res.branches.map((b, i) => {
+            const badge = i === 0
+                ? `<span style="font-size:0.68rem;background:#4ade80;color:#000;border-radius:3px;padding:1px 5px;margin-left:4px;">MEJOR</span>`
+                : "";
+            const ids = b.event_ids.map(id => `SIS-${String(id).padStart(6,"0")}`).join(", ");
+            return `<div class="branch-card" style="
+                    background:#1e2a3a; border:1px solid #2d3f55; border-radius:6px;
+                    padding:0.6rem 0.75rem; margin-bottom:0.5rem; font-size:0.78rem;">
+                <div style="font-weight:600; color:#7dd3fc; margin-bottom:0.25rem;">
+                    Raíz SIS-${String(b.root_id).padStart(6,"0")}${badge}
+                </div>
+                <div style="color:#94a3b8; margin-bottom:0.4rem;">
+                    ${b.count} nodo${b.count !== 1 ? "s" : ""} &bull; Profundidad en árbol: ${b.root_depth} &bull; Clave: ${esc(b.root_key)}
+                </div>
+                <div style="color:#64748b; margin-bottom:0.5rem; font-size:0.72rem; word-break:break-all;">
+                    ${esc(ids)}
+                </div>
+                <button onclick="archiveBranch(${JSON.stringify(b.event_ids)})"
+                        class="btn btn-sm btn-warn"
+                        style="width:100%; font-size:0.73rem; padding:0.3rem;">
+                    Archivar esta rama (${b.count} eventos)
+                </button>
+            </div>`;
+        }).join("");
+    }
+    panel.style.display = "block";
+}
+
+async function archiveBranch(eventIds) {
+    if (!confirm(`¿Archivar ${eventIds.length} evento(s)? Esta acción se puede deshacer.`)) return;
+    const res = await eel.archive_selected_branch(eventIds)();
+    if (res.ok) {
+        log(`Archivados ${res.count} evento(s) correctamente.`, "ok");
+        $("eligible-branches-panel").style.display = "none";
+        $("btn-show-branches").textContent = "Consultar ramas elegibles";
+    } else {
+        log(res.message || "Error al archivar", "err");
     }
     refresh();
 }

@@ -132,6 +132,57 @@ def main(out_dir=DATA_DIR, verbose=True):
     normal = sc.snapshot()
     put(TOPOLOGIES, "normal.json", normal)
 
+    # prueba_carga: 20 real events for manual/demo testing (Sections 11-12).
+    sc = Scenario()
+    demo_events = [
+        event(1001, 7.2, 15.0, 350.0, 620.0, "2026-06-01T08:15:00Z", "EST-001"),
+        event(1002, 6.5, 25.0, 480.0, 590.0, "2026-06-02T14:30:00Z", "EST-002"),
+        event(1003, 4.8, 22.0, 400.0, 550.0, "2026-06-03T09:00:00Z", "EST-001"),
+        event(1004, 3.2,  8.0, 150.0, 200.0, "2026-06-04T11:45:00Z", "EST-003"),
+        event(1005, 5.5, 28.0, 720.0, 180.0, "2026-06-05T16:20:00Z", "EST-004"),
+        event(1006, 6.9, 10.0, 600.0, 300.0, "2026-06-06T07:00:00Z", "EST-004"),
+        event(1007, 4.1, 50.0, 250.0, 750.0, "2026-06-07T12:10:00Z", "EST-001"),
+        event(1008, 3.8, 35.0, 800.0, 450.0, "2026-06-08T18:55:00Z", "EST-004"),
+        event(1009, 5.9, 18.0, 510.0, 510.0, "2026-06-09T03:40:00Z", "EST-002"),
+        event(1010, 7.8,  5.0, 300.0, 700.0, "2026-06-10T21:00:00Z", "EST-001"),
+        event(1011, 4.5, 30.0, 680.0, 250.0, "2026-06-11T10:30:00Z", "EST-004"),
+        event(1012, 2.9, 12.0, 100.0, 400.0, "2026-06-12T06:15:00Z", "EST-003"),
+        event(1013, 6.2, 42.0, 450.0, 450.0, "2026-06-13T14:00:00Z", "EST-002"),
+        event(1014, 5.1, 20.0, 560.0, 640.0, "2026-06-14T09:45:00Z", "EST-001"),
+        event(1015, 3.5, 65.0, 200.0, 100.0, "2026-06-15T22:30:00Z", "EST-003"),
+        event(1016, 4.6, 27.0, 390.0, 580.0, "2026-06-16T11:00:00Z", "EST-002"),
+        event(1017, 8.1,  8.0, 330.0, 660.0, "2026-06-17T04:20:00Z", "EST-001"),
+        event(1018, 3.0, 90.0, 900.0, 100.0, "2026-06-18T17:10:00Z", "EST-004"),
+        event(1019, 5.7, 33.0, 470.0, 470.0, "2026-06-19T08:00:00Z", "EST-002"),
+        event(1020, 4.3, 16.0, 620.0, 380.0, "2026-06-20T13:50:00Z", "EST-004"),
+    ]
+    demo_clock = "2026-06-30T23:59:00Z"
+    demo_params = {"W_hours": 48.0, "R_km": 40.0, "L_depth": 3, "T_archive_hours": 72.0}
+    put(INSERTIONS, "prueba_carga_inserciones.json", {
+        "format": FORMAT_INSERTIONS,
+        "description": "20 eventos de prueba con variedad de magnitudes, prioridades y zonas",
+        "clock": demo_clock,
+        "zones": ZONES,
+        "stations": STATIONS,
+        "parameters": demo_params,
+        "events": demo_events,
+    })
+    # Topology: same 20 events loaded through the live AVL, then snapshot.
+    sc.zones = [Zone.from_dict(z) for z in ZONES]
+    from domain.models import Station as _Station
+    sc.stations = {s["station_id"]: _Station.from_dict(s) for s in STATIONS}
+    sc.clock = parse_time(demo_clock)
+    sc.W_hours = demo_params["W_hours"]
+    sc.R_km = demo_params["R_km"]
+    sc.L_depth = demo_params["L_depth"]
+    sc.T_archive_hours = demo_params["T_archive_hours"]
+    for e in demo_events:
+        sc.create_event(e["event_id"], e["magnitude"], e["depth_km"],
+                        e["epicenter"]["x"], e["epicenter"]["y"],
+                        parse_time(e["occurrence_time"]), e["station_id"])
+    sc.undo_stack._stack.clear()
+    put(TOPOLOGIES, "prueba_carga_topologia.json", sc.snapshot())
+
     # stress: ascending insertions with rotations postponed (|bf| > 2).
     sc = Scenario()
     sc.load_insertions_file(os.path.join(INSERTIONS, "mezclado.json"))

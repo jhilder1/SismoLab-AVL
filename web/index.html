@@ -144,7 +144,10 @@
                     <button onclick="recoverBalance()" class="btn btn-primary">Recuperar Balance</button>
                 </div>
                 <div class="form-row">
-                    <button onclick="archiveEligible()" class="btn btn-sm full-w">Archivar Elegibles</button>
+                    <button onclick="showEligibleBranches()" class="btn btn-sm full-w" id="btn-show-branches">Consultar ramas elegibles</button>
+                </div>
+                <div id="eligible-branches-panel" style="display:none; margin-top:0.5rem;">
+                    <div id="eligible-branches-list"></div>
                 </div>
             </section>
 

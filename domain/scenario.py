@@ -552,6 +552,9 @@ class Scenario:
             self.archived[eid] = event
             count += 1
         self.total_archives += count
+        # Recalcular asociaciones: los activos que referenciaban nodos ahora
+        # archivados deben actualizarse (igual que delete_event lo hace).
+        self.recalculate_all_associations()
         self._record("ARCHIVE", before,
             f"Archivar {count} eventos: {event_ids}")
         return count

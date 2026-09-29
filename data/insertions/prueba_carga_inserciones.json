@@ -1,0 +1,285 @@
+{
+  "format": "sismolab-insertions",
+  "description": "20 eventos de prueba con variedad de magnitudes, prioridades y zonas",
+  "clock": "2026-06-30T23:59:00Z",
+  "zones": [
+    {
+      "name": "Norte",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 500,
+      "y_max": 1000,
+      "is_populated": true
+    },
+    {
+      "name": "Centro",
+      "x_min": 200,
+      "x_max": 800,
+      "y_min": 200,
+      "y_max": 800,
+      "is_populated": true
+    },
+    {
+      "name": "Sur",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": false
+    },
+    {
+      "name": "Costa",
+      "x_min": 500,
+      "x_max": 1000,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": true
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "EST-001",
+      "name": "Estacion Norte"
+    },
+    {
+      "station_id": "EST-002",
+      "name": "Estacion Centro"
+    },
+    {
+      "station_id": "EST-003",
+      "name": "Estacion Sur"
+    },
+    {
+      "station_id": "EST-004",
+      "name": "Estacion Costa"
+    }
+  ],
+  "parameters": {
+    "W_hours": 48.0,
+    "R_km": 40.0,
+    "L_depth": 3,
+    "T_archive_hours": 72.0
+  },
+  "events": [
+    {
+      "event_id": 1001,
+      "magnitude": 7.2,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 350.0,
+        "y": 620.0
+      },
+      "occurrence_time": "2026-06-01T08:15:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1002,
+      "magnitude": 6.5,
+      "depth_km": 25.0,
+      "epicenter": {
+        "x": 480.0,
+        "y": 590.0
+      },
+      "occurrence_time": "2026-06-02T14:30:00Z",
+      "station_id": "EST-002"
+    },
+    {
+      "event_id": 1003,
+      "magnitude": 4.8,
+      "depth_km": 22.0,
+      "epicenter": {
+        "x": 400.0,
+        "y": 550.0
+      },
+      "occurrence_time": "2026-06-03T09:00:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1004,
+      "magnitude": 3.2,
+      "depth_km": 8.0,
+      "epicenter": {
+        "x": 150.0,
+        "y": 200.0
+      },
+      "occurrence_time": "2026-06-04T11:45:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 1005,
+      "magnitude": 5.5,
+      "depth_km": 28.0,
+      "epicenter": {
+        "x": 720.0,
+        "y": 180.0
+      },
+      "occurrence_time": "2026-06-05T16:20:00Z",
+      "station_id": "EST-004"
+    },
+    {
+      "event_id": 1006,
+      "magnitude": 6.9,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 600.0,
+        "y": 300.0
+      },
+      "occurrence_time": "2026-06-06T07:00:00Z",
+      "station_id": "EST-004"
+    },
+    {
+      "event_id": 1007,
+      "magnitude": 4.1,
+      "depth_km": 50.0,
+      "epicenter": {
+        "x": 250.0,
+        "y": 750.0
+      },
+      "occurrence_time": "2026-06-07T12:10:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1008,
+      "magnitude": 3.8,
+      "depth_km": 35.0,
+      "epicenter": {
+        "x": 800.0,
+        "y": 450.0
+      },
+      "occurrence_time": "2026-06-08T18:55:00Z",
+      "station_id": "EST-004"
+    },
+    {
+      "event_id": 1009,
+      "magnitude": 5.9,
+      "depth_km": 18.0,
+      "epicenter": {
+        "x": 510.0,
+        "y": 510.0
+      },
+      "occurrence_time": "2026-06-09T03:40:00Z",
+      "station_id": "EST-002"
+    },
+    {
+      "event_id": 1010,
+      "magnitude": 7.8,
+      "depth_km": 5.0,
+      "epicenter": {
+        "x": 300.0,
+        "y": 700.0
+      },
+      "occurrence_time": "2026-06-10T21:00:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1011,
+      "magnitude": 4.5,
+      "depth_km": 30.0,
+      "epicenter": {
+        "x": 680.0,
+        "y": 250.0
+      },
+      "occurrence_time": "2026-06-11T10:30:00Z",
+      "station_id": "EST-004"
+    },
+    {
+      "event_id": 1012,
+      "magnitude": 2.9,
+      "depth_km": 12.0,
+      "epicenter": {
+        "x": 100.0,
+        "y": 400.0
+      },
+      "occurrence_time": "2026-06-12T06:15:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 1013,
+      "magnitude": 6.2,
+      "depth_km": 42.0,
+      "epicenter": {
+        "x": 450.0,
+        "y": 450.0
+      },
+      "occurrence_time": "2026-06-13T14:00:00Z",
+      "station_id": "EST-002"
+    },
+    {
+      "event_id": 1014,
+      "magnitude": 5.1,
+      "depth_km": 20.0,
+      "epicenter": {
+        "x": 560.0,
+        "y": 640.0
+      },
+      "occurrence_time": "2026-06-14T09:45:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1015,
+      "magnitude": 3.5,
+      "depth_km": 65.0,
+      "epicenter": {
+        "x": 200.0,
+        "y": 100.0
+      },
+      "occurrence_time": "2026-06-15T22:30:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 1016,
+      "magnitude": 4.6,
+      "depth_km": 27.0,
+      "epicenter": {
+        "x": 390.0,
+        "y": 580.0
+      },
+      "occurrence_time": "2026-06-16T11:00:00Z",
+      "station_id": "EST-002"
+    },
+    {
+      "event_id": 1017,
+      "magnitude": 8.1,
+      "depth_km": 8.0,
+      "epicenter": {
+        "x": 330.0,
+        "y": 660.0
+      },
+      "occurrence_time": "2026-06-17T04:20:00Z",
+      "station_id": "EST-001"
+    },
+    {
+      "event_id": 1018,
+      "magnitude": 3.0,
+      "depth_km": 90.0,
+      "epicenter": {
+        "x": 900.0,
+        "y": 100.0
+      },
+      "occurrence_time": "2026-06-18T17:10:00Z",
+      "station_id": "EST-004"
+    },
+    {
+      "event_id": 1019,
+      "magnitude": 5.7,
+      "depth_km": 33.0,
+      "epicenter": {
+        "x": 470.0,
+        "y": 470.0
+      },
+      "occurrence_time": "2026-06-19T08:00:00Z",
+      "station_id": "EST-002"
+    },
+    {
+      "event_id": 1020,
+      "magnitude": 4.3,
+      "depth_km": 16.0,
+      "epicenter": {
+        "x": 620.0,
+        "y": 380.0
+      },
+      "occurrence_time": "2026-06-20T13:50:00Z",
+      "station_id": "EST-004"
+    }
+  ]
+}
