@@ -217,28 +217,13 @@ const NODE_R = 22;
 const H_GAP = 16;
 const V_GAP = 60;
 
-function updateTree(treeData) {
-    const svg = $("tree-svg");
-    const emptyMsg = $("tree-empty");
+function generateTreeSvgHtml(treeData, treeViewType) {
+    if (!treeData.nodes) return { empty: true };
 
-    if (!treeData.nodes) {
-        svg.innerHTML = "";
-        svg.style.display = "none";
-        emptyMsg.style.display = "block";
-        return;
-    }
-
-    emptyMsg.style.display = "none";
-    svg.style.display = "block";
-
-    // Calcular posiciones
     const positions = [];
     const edges = [];
     let minX = Infinity, maxX = -Infinity, maxY = 0;
 
-    // X = posicion del nodo en el recorrido inorden (columna k para el k-esimo
-    // nodo), Y = profundidad. El ancho crece con la cantidad de nodos y no con
-    // 2^altura, asi que un BST degenerado (una "escalera") tambien se ve.
     let column = 0;
     function layout(node, depth) {
         if (!node) return null;
@@ -264,30 +249,21 @@ function updateTree(treeData) {
     const svgH = maxY + NODE_R * 2 + 10;
     const offsetX = -minX + NODE_R * 2;
 
-    svg.setAttribute("width", svgW);
-    svg.setAttribute("height", svgH);
-    svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-
     let html = "";
-
-    // Edges
     for (const e of edges) {
         html += `<line class="tree-edge" x1="${e.x1 + offsetX}" y1="${e.y1}" x2="${e.x2 + offsetX}" y2="${e.y2}"/>`;
     }
 
-    // Nodes
     for (const p of positions) {
         const n = p.node;
         const cx = p.x + offsetX;
         const cy = p.y;
 
-        // Color by priority
-        let fill = "#3a4a6b"; // default
+        let fill = "#3a4a6b";
         if (n.priority === 3) fill = "#c62828";
         else if (n.priority === 2) fill = "#ef6c00";
         else if (n.priority === 1) fill = "#2e7d32";
 
-        // Highlight unbalanced (el BST no guarda factor de balance)
         const hasBf = typeof n.bf === "number";
         let stroke = "none";
         let strokeW = 0;
@@ -298,25 +274,40 @@ function updateTree(treeData) {
 
         html += `<circle class="node-circle" cx="${cx}" cy="${cy}" r="${NODE_R}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
 
-        // Costly access (section 9): high priority AND node depth > L.
-        // Shown as a dashed outer ring so it stays distinct from the
-        // priority colour, which is the node fill.
-        // The BST view has no such mark: costly ids come from the AVL.
-        if (treeView === "avl" && costlyIds.has(n.event_id)) {
+        if (treeViewType === "avl" && costlyIds.has(n.event_id)) {
             html += `<circle class="node-costly" cx="${cx}" cy="${cy}" r="${NODE_R + 5}"/>`;
             html += `<text class="node-costly-mark" x="${cx + NODE_R + 3}" y="${cy - NODE_R + 4}">$</text>`;
         }
         html += `<text class="node-label" x="${cx}" y="${cy + 1}">ID:${n.event_id}</text>`;
         html += `<text class="node-sublabel" x="${cx}" y="${cy + 13}">M${n.magnitude}</text>`;
 
-        // Balance factor above node
         if (hasBf) {
             const bfColor = Math.abs(n.bf) > 1 ? "#ff1744" : "var(--yellow)";
             html += `<text class="node-bf" x="${cx}" y="${cy - NODE_R - 4}" fill="${bfColor}">${n.bf}</text>`;
         }
     }
+    return { empty: false, svgW, svgH, html };
+}
 
-    svg.innerHTML = html;
+function updateTree(treeData) {
+    const svg = $("tree-svg");
+    const emptyMsg = $("tree-empty");
+
+    const res = generateTreeSvgHtml(treeData, treeView);
+
+    if (res.empty) {
+        svg.innerHTML = "";
+        svg.style.display = "none";
+        emptyMsg.style.display = "block";
+        return;
+    }
+
+    emptyMsg.style.display = "none";
+    svg.style.display = "block";
+    svg.setAttribute("width", res.svgW);
+    svg.setAttribute("height", res.svgH);
+    svg.setAttribute("viewBox", `0 0 ${res.svgW} ${res.svgH}`);
+    svg.innerHTML = res.html;
 }
 
 // =====================================================
@@ -855,14 +846,41 @@ async function runQueryCompare() {
     showQueryCost(`Comparacion sobre los ${d.size} eventos activos actuales `
         + `(compara dos estructuras completas, no es una busqueda por clave)`);
     const row = (label, key) => `<tr><td>${label}</td><td>${d.avl[key] ?? "--"}</td><td>${d.bst[key] ?? "--"}</td></tr>`;
-    showQueryResults(`<table class="query-table">
+    
+    let tableHtml = `<table class="query-table">
         <tr><th></th><th>AVL</th><th>BST</th></tr>
         ${row("Raiz", "root")}
         ${row("Altura", "height")}
         ${row("Hojas", "leaves")}
         ${row("Comparaciones totales (buscar todas las claves)", "total_comparisons")}
         ${row("Comparaciones promedio", "avg_comparisons")}
-    </table>`);
+    </table>`;
+
+    let avlHtml = `<p class="muted">Árbol vacío</p>`;
+    let bstHtml = `<p class="muted">Árbol vacío</p>`;
+
+    if (lastState && lastState.tree && lastState.tree.nodes) {
+        const avlData = generateTreeSvgHtml(lastState.tree, "avl");
+        avlHtml = `<svg width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${avlData.svgW} ${avlData.svgH}">${avlData.html}</svg>`;
+    }
+
+    if (lastState && lastState.bst && lastState.bst.nodes) {
+        const bstData = generateTreeSvgHtml(lastState.bst, "bst");
+        bstHtml = `<svg width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${bstData.svgW} ${bstData.svgH}">${bstData.html}</svg>`;
+    }
+
+    showQueryResults(tableHtml + `
+        <div style="display:flex; gap:16px; margin-top:20px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:300px;">
+                <h4 style="color:var(--text); margin-bottom:8px; text-align:center;">Árbol AVL (Balanceado)</h4>
+                ${avlHtml}
+            </div>
+            <div style="flex:1; min-width:300px;">
+                <h4 style="color:var(--text); margin-bottom:8px; text-align:center;">Árbol BST (No Balanceado)</h4>
+                ${bstHtml}
+            </div>
+        </div>
+    `);
 }
 
 // =====================================================
