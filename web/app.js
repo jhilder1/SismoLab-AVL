@@ -380,7 +380,7 @@ function drawMap() {
 }
 
 async function createEvent() {
-    const timeVal = val("ev-time") || new Date().toISOString().slice(0, 19);
+    const timeVal = val("ev-time") || (lastState ? lastState.clock.slice(0, 19) : "2026-01-01T00:00:00");
     const res = await eel.create_event(
         val("ev-id"), val("ev-mag"), val("ev-depth"),
         val("ev-x"), val("ev-y"), timeVal, val("ev-station")
@@ -421,7 +421,7 @@ async function searchEvent() {
 }
 
 async function enqueueReport() {
-    const timeVal = val("rp-time") || new Date().toISOString().slice(0, 19);
+    const timeVal = val("rp-time") || (lastState ? lastState.clock.slice(0, 19) : "2026-01-01T00:00:00");
     const res = await eel.enqueue_report(
         val("rp-evid"), val("rp-rev"), val("rp-station"),
         val("rp-mag"), val("rp-depth"),
