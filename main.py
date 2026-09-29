@@ -148,6 +148,11 @@ def undo_action():
     """Deshace la última acción."""
     return sc.undo()
 
+@eel.expose
+def redo_action():
+    """Rehace la acción recién deshecha."""
+    return sc.redo()
+
 
 @eel.expose
 def toggle_stress():

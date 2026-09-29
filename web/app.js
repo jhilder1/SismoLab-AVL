@@ -40,7 +40,7 @@ async function refresh() {
         updateStats(state);
         drawCurrentTree();
         updateEvents(state.events);
-        renderArchived(state.archived);
+        renderArchived(state.archived_events);
         renderQueue(state.queued_reports);
         updateStress(state.stress_mode);
         $("clock").textContent = state.clock.replace("T", " ");
@@ -188,7 +188,7 @@ function drawCurrentTree() {
         return;
     }
     if (isHistory) {
-        $("tree-root").textContent = `Histórico | ${(lastState.archived || []).length} archivados`;
+        $("tree-root").textContent = `Histórico | ${(lastState.archived_events || []).length} archivados`;
         return;
     }
     if (isQueries) {
@@ -604,6 +604,13 @@ async function undoAction() {
     refresh();
 }
 
+async function redoAction() {
+    const res = await eel.redo_action()();
+    const msg = res.message || `Rehecho: ${res.description}`;
+    log(msg, res.result === "REDONE" ? "ok" : "info");
+    refresh();
+}
+
 async function toggleStress() {
     const res = await eel.toggle_stress()();
     log("Modo estres: " + (res.stress_mode ? "ACTIVADO" : "desactivado"), res.stress_mode ? "err" : "ok");
@@ -614,9 +621,12 @@ async function recoverBalance() {
     const res = await eel.recover_balance()();
     if (res.result === "RECOVERED") {
         const c = res.cost;
-        log(`Balance recuperado. LL=${c.ll} RR=${c.rr} LR=${c.lr} RL=${c.rl} | Altura final=${c.final_height}`, "ok");
+        const msg = `Balance recuperado.\n\nRotaciones realizadas:\nLL=${c.ll}  RR=${c.rr}  LR=${c.lr}  RL=${c.rl}\nAltura final del árbol=${c.final_height}`;
+        log(msg.replace(/\n/g, ' '), "ok");
+        alert(msg);
     } else {
         log(res.message, "info");
+        alert(res.message);
     }
     refresh();
 }
@@ -624,9 +634,13 @@ async function recoverBalance() {
 async function runAudit() {
     const res = await eel.run_audit()();
     if (res.is_valid) {
+        const msg = `✅ Auditoría OK\n\n${res.nodes_checked} nodos verificados exitosamente.\n0 errores encontrados.\n\nTodo el árbol cumple las propiedades AVL.`;
         log(`Auditoria OK: ${res.nodes_checked} nodos verificados, 0 errores`, "ok");
+        alert(msg);
     } else {
-        log(`Auditoria FALLO: ${res.errors.length} error(es): ${res.errors[0]}`, "err");
+        const msg = `❌ Auditoría FALLÓ\n\nSe encontraron ${res.errors.length} error(es) en el árbol.\n\nDetalle del primer error:\n${res.errors[0]}`;
+        log(`Auditoria FALLO: ${res.errors.length} error(es)`, "err");
+        alert(msg);
     }
 }
 

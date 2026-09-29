@@ -32,6 +32,7 @@ class Scenario:
         self.associations: dict[int, Association] = {}
         self.report_queue = ReportQueue()
         self.undo_stack = UndoStack()
+        self.redo_stack = UndoStack()
         self.zones: list[Zone] = []
         self.stations: dict[str, Station] = {}
 
@@ -77,6 +78,7 @@ class Scenario:
         self.undo_stack.push({
             "type": action_type, "before": before, "description": description,
         })
+        self.redo_stack = UndoStack()
 
     def summary(self) -> dict:
         """Indicadores visibles (Sección 14) + parámetros vigentes."""
@@ -574,6 +576,16 @@ class Scenario:
             return {"result": "EMPTY", "message": "No hay acciones para deshacer"}
 
         action = self.undo_stack.pop()
+        current_state = self.snapshot()
+        
+        if not hasattr(self, "redo_stack"):
+            self.redo_stack = UndoStack()
+            
+        self.redo_stack.push({
+            "type": action["type"],
+            "before": current_state,
+            "description": action["description"],
+        })
 
         # The snapshot already holds the queue in its original order, so undoing
         # a queue step puts the report back even when that step discarded it.
@@ -581,6 +593,27 @@ class Scenario:
 
         return {
             "result": "UNDONE",
+            "action_type": action["type"],
+            "description": action["description"],
+        }
+
+    def redo(self) -> dict:
+        if not hasattr(self, "redo_stack") or self.redo_stack.is_empty():
+            return {"result": "EMPTY", "message": "No hay acciones para rehacer"}
+
+        action = self.redo_stack.pop()
+        current_state = self.snapshot()
+        
+        self.undo_stack.push({
+            "type": action["type"],
+            "before": current_state,
+            "description": action["description"],
+        })
+
+        apply_state(self, action["before"])
+
+        return {
+            "result": "REDONE",
             "action_type": action["type"],
             "description": action["description"],
         }
