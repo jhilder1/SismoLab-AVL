@@ -308,6 +308,7 @@ function updateTree(treeData) {
     svg.setAttribute("height", res.svgH);
     svg.setAttribute("viewBox", `0 0 ${res.svgW} ${res.svgH}`);
     svg.innerHTML = res.html;
+    addZoomPan(svg);
 }
 
 // =====================================================
@@ -875,12 +876,12 @@ async function runQueryCompare() {
 
     if (lastState && lastState.tree && lastState.tree.nodes) {
         const avlData = generateTreeSvgHtml(lastState.tree, "avl");
-        avlHtml = `<svg width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${avlData.svgW} ${avlData.svgH}">${avlData.html}</svg>`;
+        avlHtml = `<svg id="compare-avl-svg" width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${avlData.svgW} ${avlData.svgH}">${avlData.html}</svg>`;
     }
 
     if (lastState && lastState.bst && lastState.bst.nodes) {
         const bstData = generateTreeSvgHtml(lastState.bst, "bst");
-        bstHtml = `<svg width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${bstData.svgW} ${bstData.svgH}">${bstData.html}</svg>`;
+        bstHtml = `<svg id="compare-bst-svg" width="100%" style="height:350px; background:var(--bg2); border-radius:var(--radius); border:1px solid var(--border);" viewBox="0 0 ${bstData.svgW} ${bstData.svgH}">${bstData.html}</svg>`;
     }
 
     showQueryResults(tableHtml + `
@@ -895,6 +896,11 @@ async function runQueryCompare() {
             </div>
         </div>
     `);
+
+    setTimeout(() => {
+        if ($("compare-avl-svg")) addZoomPan($("compare-avl-svg"));
+        if ($("compare-bst-svg")) addZoomPan($("compare-bst-svg"));
+    }, 10);
 }
 
 // =====================================================
@@ -1058,3 +1064,70 @@ async function init() {
 
 // Arrancar cuando la pagina cargue
 window.addEventListener("load", init);
+
+function addZoomPan(svg) {
+    if (!svg || svg._zoomPanAdded) return;
+    svg._zoomPanAdded = true;
+    svg.style.cursor = "grab";
+
+    let isPanning = false;
+    let startPoint = { x: 0, y: 0 };
+    let viewBox = { x: 0, y: 0, w: 0, h: 0 };
+
+    function parseViewBox() {
+        const vb = svg.getAttribute("viewBox");
+        if (vb) {
+            const p = vb.split(" ").map(Number);
+            return { x: p[0], y: p[1], w: p[2], h: p[3] };
+        }
+        return { x: 0, y: 0, w: svg.clientWidth || 1000, h: svg.clientHeight || 1000 };
+    }
+
+    svg.addEventListener("pointerdown", e => {
+        isPanning = true;
+        svg.style.cursor = "grabbing";
+        viewBox = parseViewBox();
+        startPoint = { x: e.clientX, y: e.clientY };
+        svg.setPointerCapture(e.pointerId);
+    });
+
+    svg.addEventListener("pointermove", e => {
+        if (!isPanning) return;
+        e.preventDefault();
+        const rect = svg.getBoundingClientRect();
+        const scaleX = viewBox.w / rect.width;
+        const scaleY = viewBox.h / rect.height;
+        
+        const dx = (e.clientX - startPoint.x) * scaleX;
+        const dy = (e.clientY - startPoint.y) * scaleY;
+        
+        svg.setAttribute("viewBox", `${viewBox.x - dx} ${viewBox.y - dy} ${viewBox.w} ${viewBox.h}`);
+    });
+
+    svg.addEventListener("pointerup", e => {
+        isPanning = false;
+        svg.style.cursor = "grab";
+        svg.releasePointerCapture(e.pointerId);
+    });
+
+    svg.addEventListener("wheel", e => {
+        e.preventDefault();
+        const vb = parseViewBox();
+        const rect = svg.getBoundingClientRect();
+        
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        
+        const svgX = vb.x + (mx / rect.width) * vb.w;
+        const svgY = vb.y + (my / rect.height) * vb.h;
+
+        const zoom = e.deltaY > 0 ? 1.2 : 0.83333; // 0.8333 is approx 1/1.2
+        const newW = vb.w * zoom;
+        const newH = vb.h * zoom;
+        
+        const newX = svgX - (mx / rect.width) * newW;
+        const newY = svgY - (my / rect.height) * newH;
+        
+        svg.setAttribute("viewBox", `${newX} ${newY} ${newW} ${newH}`);
+    });
+}
