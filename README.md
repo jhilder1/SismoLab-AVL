@@ -26,8 +26,19 @@ Se abre una ventana con la interfaz. Cerrar la ventana detiene el programa.
 Todas las pruebas con un solo comando:
 
 ```
-python -m unittest discover -s tests -v
+pip install -r requirements-dev.txt
+python -m pytest tests/
 ```
+
+`python -m unittest discover -s tests -v` también funciona, pero solo para
+los archivos escritos como clases `unittest.TestCase`
+(`test_storage.py`, `test_undo.py`, `test_loading.py`, `test_versions.py`,
+`test_section16_persistence.py`): el `TestLoader` de `unittest` no recoge
+funciones sueltas `def test_algo():`, así que se salta por completo
+`test_new_structure.py`, `test_iterative_tree_queries.py` y
+`test_audit_associations.py` sin avisar (sale "OK" con menos pruebas de las
+que existen). `pytest` sí recoge ambos estilos, por eso es el comando que se
+debe usar para correr la suite completa.
 
 | Archivo | Qué prueba |
 |---|---|
@@ -37,6 +48,8 @@ python -m unittest discover -s tests -v
 | `tests/test_loading.py` | Guardado, carga por topología y por inserciones, validaciones (sección 12) |
 | `tests/test_versions.py` | Versiones con nombre que persisten al cerrar el programa (sección 13) |
 | `tests/test_section16_persistence.py` | Caso "Persistencia y consistencia" de la sección 16, paso a paso, y reproducibilidad de `data/` |
+| `tests/test_iterative_tree_queries.py` | `query_top_k_pending`, `query_by_interval` y `find_eligible_branches` sobre un árbol degenerado (sin RecursionError) y equivalencia exacta con la versión recursiva anterior en un árbol chico |
+| `tests/test_audit_associations.py` | `run_audit` detecta una referencia que existe pero viola magnitud/tiempo/W/R, y ciclos en la cadena de referencias (sección 14 sobre sección 7) |
 
 ## Arquitectura
 

@@ -502,42 +502,57 @@ class Scenario:
     # --- Archivo ---
 
     def find_eligible_branches(self) -> list[dict]:
+        # Iterative pre-order search (explicit stack of (node, depth)): only
+        # recurses into children when the current subtree is NOT fully
+        # eligible, same pruning as the old recursive version. No node
+        # revisits its own subtree twice, so it stays O(n) on any tree shape,
+        # including a degenerate chain of thousands of nodes.
         result = []
-        self._find_eligible(self.avl.root, 0, result)
+        stack = [(self.avl.root, 0)]
+        while stack:
+            node, depth = stack.pop()
+            if node is None:
+                continue
+            ids = self._is_subtree_eligible(node)
+            if ids is not None:
+                result.append({
+                    "root_key": node.key,
+                    "event_ids": ids,
+                    "count": len(ids),
+                    "root_depth": depth,
+                    "root_id": node.event_id,
+                })
+            else:
+                stack.append((node.right, depth + 1))
+                stack.append((node.left, depth + 1))
         # Desempates: 1. Mayor cantidad, 2. Mayor profundidad de raíz, 3. Mayor ID
         result.sort(key=lambda x: (x["count"], x["root_depth"], x["root_id"]), reverse=True)
         return result
 
-    def _find_eligible(self, node, current_depth: int, result: list):
-        if not node:
-            return
+    def _is_subtree_eligible(self, node) -> Optional[list]:
+        """Pre-order ids of the subtree if every node in it is eligible
+        (LOW priority and older than T), else None. Iterative pre-order walk
+        (explicit stack) with the same early exit as the old recursive AND
+        chain: stops at the first non-eligible node encountered in pre-order,
+        without building the rest of the list."""
+        if node is None:
+            return []
         ids = []
-        if self._is_subtree_eligible(node, ids):
-            result.append({
-                "root_key": node.key, 
-                "event_ids": ids, 
-                "count": len(ids),
-                "root_depth": current_depth,
-                "root_id": node.event_id
-            })
-        else:
-            self._find_eligible(node.left, current_depth + 1, result)
-            self._find_eligible(node.right, current_depth + 1, result)
-
-    def _is_subtree_eligible(self, node, ids: list) -> bool:
-        if not node:
-            return True
-        event = self.event_index.get(node.event_id)
-        if not event:
-            return False
-        if event.priority != Priority.LOW:
-            return False
-        age = self.clock - event.occurrence_time
-        if age <= timedelta(hours=self.T_archive_hours):
-            return False
-        ids.append(node.event_id)
-        return (self._is_subtree_eligible(node.left, ids)
-                and self._is_subtree_eligible(node.right, ids))
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            event = self.event_index.get(current.event_id)
+            if not event or event.priority != Priority.LOW:
+                return None
+            age = self.clock - event.occurrence_time
+            if age <= timedelta(hours=self.T_archive_hours):
+                return None
+            ids.append(current.event_id)
+            if current.right:
+                stack.append(current.right)
+            if current.left:
+                stack.append(current.left)
+        return ids
 
     def archive_branch(self, event_ids: list[int]) -> int:
         before = self.snapshot()
@@ -683,17 +698,94 @@ class Scenario:
         return errors
 
     def _audit_associations(self) -> list[str]:
+        """Check every stored reference against the same four conditions
+        _find_candidates applies when an association is (re)computed: the
+        referenced event must have strictly greater magnitude, have occurred
+        strictly before, within W hours and within R km. These are counted
+        as real errors (they affect is_valid), not separate warnings: the
+        audit is here to prove the promise of Section 7 (an association
+        always reflects the *current* W/R and the *current* set of events),
+        so a reference that breaks any of the four rules is exactly the kind
+        of silent data corruption an audit exists to catch -- for example a
+        stale reference left behind by a code path that changes W, R or the
+        event set without calling recalculate_all_associations. If every
+        such path does call it correctly, this audit finds nothing, which is
+        also how it was verified: recalculate_all_associations is what is
+        expected to keep the graph clean after every change Section 7 lists
+        (create, correct, delete, archive, parameter update).
+
+        Also checks the reference graph for cycles. Every valid reference
+        points strictly backward in time, so a cycle cannot form between
+        references that all individually pass the checks above -- but the
+        graph is checked anyway, independently of those checks, in case a
+        loaded file or a future code path ties two events together without
+        going through _calculate_association at all.
+        """
         errors = []
-        for event_id, event in self.event_index.items():
+        all_events: dict[int, SeismicEvent] = {}
+        all_events.update(self.event_index)
+        all_events.update(self.archived)
+
+        for event_id, event in all_events.items():
             ref_id = event.reference_event_id
-            if ref_id is not None:
-                if ref_id not in self.event_index and ref_id not in self.archived:
-                    errors.append(f"Evento activo {event_id} referencia a ID inexistente/eliminado: {ref_id}")
-        for event_id, event in self.archived.items():
-            ref_id = event.reference_event_id
-            if ref_id is not None:
-                if ref_id not in self.event_index and ref_id not in self.archived:
-                    errors.append(f"Evento archivado {event_id} referencia a ID inexistente/eliminado: {ref_id}")
+            if ref_id is None:
+                continue
+            origin = "archivado" if event_id in self.archived else "activo"
+            ref = all_events.get(ref_id)
+            if ref is None:
+                errors.append(f"Evento {origin} {event_id} referencia a ID "
+                              f"inexistente/eliminado: {ref_id}")
+                continue
+            if ref.magnitude <= event.magnitude:
+                errors.append(
+                    f"Evento {origin} {event_id} (M={event.magnitude}) referencia a "
+                    f"{ref_id} (M={ref.magnitude}): la referencia no tiene magnitud mayor")
+            if ref.occurrence_time >= event.occurrence_time:
+                errors.append(
+                    f"Evento {origin} {event_id} referencia a {ref_id}, que no ocurrió "
+                    f"estrictamente antes")
+            else:
+                delta = event.occurrence_time - ref.occurrence_time
+                if delta > timedelta(hours=self.W_hours):
+                    errors.append(
+                        f"Evento {origin} {event_id} referencia a {ref_id} fuera de la "
+                        f"ventana W={self.W_hours}h (diferencia real: {delta})")
+            dist = event.epicenter.distance_to(ref.epicenter)
+            if dist > self.R_km:
+                errors.append(
+                    f"Evento {origin} {event_id} referencia a {ref_id} a distancia "
+                    f"{dist:.2f}km, fuera de R={self.R_km}km")
+
+        errors += self._audit_association_cycles(all_events)
+        return errors
+
+    def _audit_association_cycles(self, all_events: dict[int, SeismicEvent]) -> list[str]:
+        """Cycle detection over the reference graph (each event has at most
+        one outgoing reference_event_id, so this is a functional graph: one
+        pass with a 3-color mark, O(n) total, no recursion)."""
+        errors = []
+        UNVISITED, IN_PATH, DONE = 0, 1, 2
+        state = {eid: UNVISITED for eid in all_events}
+
+        for start_id in all_events:
+            if state[start_id] != UNVISITED:
+                continue
+            path = []
+            current = start_id
+            while current is not None and state.get(current) == UNVISITED:
+                state[current] = IN_PATH
+                path.append(current)
+                event = all_events.get(current)
+                current = event.reference_event_id if event else None
+
+            if current is not None and state.get(current) == IN_PATH:
+                cycle = path[path.index(current):] + [current]
+                errors.append("Ciclo de referencias: "
+                              + " -> ".join(str(c) for c in cycle))
+
+            for node in path:
+                state[node] = DONE
+
         return errors
 
     # --- Modo estrés ---
@@ -880,29 +972,34 @@ class Scenario:
         Recorre el árbol en orden inverso (derecha a izquierda) y poda la búsqueda
         al alcanzar k elementos.
         Reporta la cantidad de nodos examinados.
+
+        Iterative reverse in-order walk (explicit stack: push the right spine,
+        pop, then descend left), so a degenerate tree of any size cannot
+        overflow the recursion stack. The pruning happens at the same point as
+        the old recursive version: a node is only counted once its whole right
+        subtree has been explored, and the walk stops the instant results
+        reach k, so nodes_examined matches the recursive version exactly.
         """
         if k <= 0:
             return {"results": [], "nodes_examined": 0, "k": k, "count": 0}
 
         results = []
         nodes_examined = 0
-
-        def traverse_reverse(node):
-            nonlocal nodes_examined
-            if not node or len(results) >= k:
-                return
-            traverse_reverse(node.right)
-            if len(results) >= k:
-                return
+        stack = []
+        node = self.avl.root
+        while (stack or node) and len(results) < k:
+            while node:
+                stack.append(node)
+                node = node.right
+            node = stack.pop()
             nodes_examined += 1
             event = node.event
             if event and event.attention_state == AttentionState.PENDING:
                 results.append(event.to_dict())
             if len(results) >= k:
-                return
-            traverse_reverse(node.left)
+                break
+            node = node.left
 
-        traverse_reverse(self.avl.root)
         return {
             "results": results,
             "nodes_examined": nodes_examined,
@@ -922,10 +1019,11 @@ class Scenario:
         matched = []
         nodes_examined = 0
 
-        def traverse(node):
-            nonlocal nodes_examined
-            if not node:
-                return
+        # Iterative pre-order walk (explicit stack): visits every node exactly
+        # once, so a degenerate tree of any size cannot overflow the stack.
+        stack = [self.avl.root] if self.avl.root else []
+        while stack:
+            node = stack.pop()
             nodes_examined += 1
             e = node.event
             if e:
@@ -940,10 +1038,11 @@ class Scenario:
                 if mag_ok and depth_ok and date_ok:
                     matched.append(e.to_dict())
 
-            traverse(node.left)
-            traverse(node.right)
+            if node.right:
+                stack.append(node.right)
+            if node.left:
+                stack.append(node.left)
 
-        traverse(self.avl.root)
         return {
             "results": matched,
             "nodes_examined": nodes_examined,

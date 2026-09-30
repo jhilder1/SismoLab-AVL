@@ -158,6 +158,14 @@ class Section16PersistenceTest(unittest.TestCase):
         self.assertEqual(scenario_to_dict(sc), before)
 
 
+#: Files present in data/ that make_data.py does not (and should not) regenerate:
+#: they come from tools/generate_massive_data.py, which draws from an unseeded
+#: random.uniform on every run and is meant for manual load testing (not a
+#: Section 12/16 fixture), so it has no single reproducible content to compare
+#: against.
+NON_REPRODUCIBLE_FILES = {"insertions": {"prueba_carga_masiva_1500.json"}}
+
+
 class ReproducibleDataTest(unittest.TestCase):
 
     def test_regenerated_files_match_data_folder(self):
@@ -171,9 +179,11 @@ class ReproducibleDataTest(unittest.TestCase):
         try:
             make_data.main(out_dir=out, verbose=False)
             for folder in ("insertions", "topologies"):
+                excluded = NON_REPRODUCIBLE_FILES.get(folder, set())
                 generated = sorted(os.listdir(os.path.join(out, folder)))
                 self.assertEqual(generated, sorted(
-                    f for f in os.listdir(data_file(folder)) if f.endswith(".json")))
+                    f for f in os.listdir(data_file(folder))
+                    if f.endswith(".json") and f not in excluded))
                 for name in generated:
                     with self.subTest(file=f"{folder}/{name}"):
                         # Compare parsed JSON: Git may change line endings on checkout.
