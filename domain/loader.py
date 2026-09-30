@@ -25,7 +25,7 @@ from domain.validation import (
 )
 
 _METRIC_NAMES = ("events_created", "reports_processed", "corrections", "archives",
-                 "reports_discarded", "conflicts", "confirmations")
+                 "archive_operations", "reports_discarded", "conflicts", "confirmations")
 _ROTATION_NAMES = ("ll", "rr", "lr", "rl", "simple_left", "simple_right")
 
 
@@ -175,6 +175,16 @@ def _check_scenario_fields(state: dict, problems: list[str]) -> None:
         problems.append("queue must be an object with a 'reports' list")
     else:
         queue.setdefault("total_enqueued", len(queue["reports"]))
+        # Queued reports get the same checks as enqueue_report, so a file
+        # cannot slip in data the program itself would never accept.
+        for position, report in enumerate(queue["reports"], start=1):
+            where = f"Queued report #{position}"
+            check_event_data(report, clock, where, problems)
+            if isinstance(report, dict):
+                if not is_int(report.get("revision")) or report["revision"] < 1:
+                    problems.append(f"{where}: revision must be a positive integer")
+                if report.get("station_id") not in station_ids:
+                    problems.append(f"{where}: unknown station {report.get('station_id')!r}")
 
     metrics = state["metrics"]
     counters = [metrics[n] for n in _METRIC_NAMES] + list(metrics["rotations"].values())
@@ -400,6 +410,7 @@ def compare_loaded_trees(sc) -> dict:
             "leaves": tree.count_leaves(),
             "nodes": tree.size,
             "total_comparisons": sum(comparisons),
+            "avg_comparisons": round(sum(comparisons) / len(keys), 2) if keys else 0.0,
             "max_comparisons": max(comparisons, default=0),
         }
 

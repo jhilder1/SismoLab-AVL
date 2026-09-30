@@ -86,6 +86,15 @@ def correct_event(event_id, magnitude=None, depth_km=None):
 
 
 @eel.expose
+def preview_delete(event_id):
+    """Muestra el evento afectado antes de eliminarlo (Sección 6)."""
+    try:
+        return {"ok": True, **sc.preview_delete(int(event_id))}
+    except (TypeError, ValueError) as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
 def delete_event(event_id):
     """Elimina un evento del catálogo activo."""
     try:
@@ -97,23 +106,14 @@ def delete_event(event_id):
 
 @eel.expose
 def search_event(event_id):
-    """Busca un evento por ID. Retorna datos y costo de acceso."""
+    """Busca un evento por ID: indica si está activo, archivado o eliminado."""
     try:
-        eid = int(event_id)
-        event = sc.get_event(eid)
-        if not event:
-            return {"ok": False, "message": f"Evento {eid} no encontrado"}
-        key = event.build_key()
-        node, visited = sc.avl.search(key)
-        depth = visited - 1 if node else None
-        return {
-            "ok": True,
-            "event": event.to_dict(),
-            "depth": depth,
-            "access_cost": visited,
-        }
-    except Exception as e:
-        return {"ok": False, "message": str(e)}
+        info = sc.lookup_event(int(event_id))
+        if info["status"] == "unknown":
+            return {"ok": False, "message": f"El ID {info['event_id']} no existe en el escenario"}
+        return {"ok": True, **info}
+    except (TypeError, ValueError):
+        return {"ok": False, "message": f"ID inválido: {event_id!r}"}
 
 
 @eel.expose

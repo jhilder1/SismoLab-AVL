@@ -398,27 +398,65 @@ async function correctEvent() {
     if (res.ok) refresh();
 }
 
+// Section 6: the affected event is shown before it is deleted.
 async function deleteEvent() {
-    const res = await eel.delete_event(val("del-id"))();
+    const id = val("del-id");
+    const preview = await eel.preview_delete(id)();
+    if (!preview.ok) { log(preview.message, "err"); return; }
+
+    const e = preview.event;
+    const ids = list => list.length ? list.map(formatEventId).join(", ") : "ninguno";
+    const text = `Eliminar ${formatEventId(e.event_id)}\n\n`
+        + `M=${e.magnitude} | P=${e.priority} | H=${e.depth_km} km | Rev=${e.revision}\n`
+        + `Clave=${preview.key} | profundidad en el arbol=${preview.depth}\n\n`
+        + `Solo se retira este evento. Sus ${preview.descendants.length} descendiente(s) siguen activos: `
+        + `${ids(preview.descendants)}\n`
+        + `Eventos que lo usan como referencia (se recalcula su asociacion): ${ids(preview.dependents)}\n\n`
+        + `Su ID quedara como eliminado. La accion se puede deshacer.`;
+    if (!confirm(text)) { log("Eliminacion cancelada", "info"); return; }
+
+    const res = await eel.delete_event(id)();
     log(res.message, res.ok ? "ok" : "err");
     if (res.ok) refresh();
+}
+
+// Status of an id (Section 6): active, archived or deleted.
+const STATUS_LABEL = { active: "ACTIVO", archived: "ARCHIVADO", deleted: "ELIMINADO" };
+
+function statusBadgeHtml(status) {
+    return `<span class="status-badge ${status}">${STATUS_LABEL[status] || status}</span>`;
+}
+
+function formatEventId(id) {
+    return "SIS-" + String(id).padStart(6, "0");
 }
 
 async function searchEvent() {
     const res = await eel.search_event(val("search-id"))();
     const box = $("search-result");
-    if (res.ok) {
-        const e = res.event;
-        box.innerHTML = `<b>SIS-${String(e.event_id).padStart(6,"0")}</b> M=${e.magnitude} P=${e.priority}<br>
-            Prof=${e.depth_km}km | Rev=${e.revision}<br>
-            Profundidad en arbol: ${res.depth} | Costo acceso: ${res.access_cost}`;
-        box.classList.remove("hidden");
-        log("Evento encontrado. Costo de acceso: " + res.access_cost, "info");
-    } else {
-        box.innerHTML = res.message;
-        box.classList.remove("hidden");
+    box.classList.remove("hidden");
+    if (!res.ok) {
+        box.innerHTML = esc(res.message);
         log(res.message, "err");
+        return;
     }
+
+    let html = `<b>${formatEventId(res.event_id)}</b>${statusBadgeHtml(res.status)}<br>`;
+    const e = res.event;
+    if (res.status === "active") {
+        html += `M=${e.magnitude} P=${e.priority} | Prof=${e.depth_km}km | Rev=${e.revision}<br>
+            Clave=${esc(res.key)} | Profundidad en arbol: ${res.depth} | Costo acceso: ${res.access_cost}`;
+        log(`Evento activo encontrado. Costo de acceso: ${res.access_cost} nodos`, "info");
+    } else if (res.status === "archived") {
+        html += `M=${e.magnitude} P=${e.priority} | Prof=${e.depth_km}km | Rev=${e.revision}<br>
+            Esta en el historico: fuera del AVL activo, conserva datos y asociaciones.`;
+        log("El evento esta archivado en el historico", "info");
+    } else {
+        html += `Fue eliminado: su ID no se puede reutilizar ni reactivar con reportes.
+            Solo se recupera deshaciendo la eliminacion o restaurando una version.`;
+        log("El evento fue eliminado", "info");
+    }
+    box.innerHTML = html;
 }
 
 async function enqueueReport() {
@@ -858,17 +896,19 @@ async function runQueryCompare() {
     const res = await eel.compare_trees_view()();
     if (!res.ok) { showQueryError(res.message); return; }
     const d = res.data;
-    showQueryCost(`Comparacion sobre los ${d.size} eventos activos actuales `
-        + `(compara dos estructuras completas, no es una busqueda por clave)`);
-    const row = (label, key) => `<tr><td>${label}</td><td>${d.avl[key] ?? "--"}</td><td>${d.bst[key] ?? "--"}</td></tr>`;
-    
+    showQueryCost(`Comparacion de los arboles actuales: las mismas ${d.size} claves, `
+        + `con las mismas operaciones en el mismo orden (cada clave se busca una vez en cada arbol)`);
+    const row = (label, key) => `<tr><td>${label}</td><td>${esc(d.avl[key] ?? "--")}</td><td>${esc(d.bst[key] ?? "--")}</td></tr>`;
+
     let tableHtml = `<table class="query-table">
         <tr><th></th><th>AVL</th><th>BST</th></tr>
         ${row("Raiz", "root")}
         ${row("Altura", "height")}
+        ${row("Profundidad maxima", "max_depth")}
         ${row("Hojas", "leaves")}
         ${row("Comparaciones totales (buscar todas las claves)", "total_comparisons")}
         ${row("Comparaciones promedio", "avg_comparisons")}
+        ${row("Peor busqueda (comparaciones)", "max_comparisons")}
     </table>`;
 
     let avlHtml = `<p class="muted">Árbol vacío</p>`;

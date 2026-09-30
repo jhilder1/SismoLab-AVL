@@ -14,7 +14,7 @@ from domain.models import (
     Priority, AttentionState, EventStatus,
 )
 from domain.storage import scenario_to_dict, apply_state, read_json_file, write_json_file
-from domain.loader import load_topology, load_insertions
+from domain.loader import load_topology, load_insertions, compare_loaded_trees
 from domain.validation import check_tree
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
@@ -49,7 +49,8 @@ class Scenario:
         self.total_events_created = 0
         self.total_reports_processed = 0
         self.total_corrections = 0
-        self.total_archives = 0
+        self.total_archives = 0              # events archived, cumulative
+        self.total_archive_operations = 0    # mass-archive operations (Section 14)
         self.total_reports_discarded = 0
         self.total_conflicts = 0
         self.total_confirmations = 0
@@ -64,6 +65,34 @@ class Scenario:
 
     def get_event(self, event_id: int) -> Optional[SeismicEvent]:
         return self.event_index.get(event_id)
+
+    def lookup_event(self, event_id: int) -> dict:
+        """Find an event by id and say whether it is active, archived or
+        deleted (Section 6), even if its priority or magnitude changed.
+
+        The id is only the third component of K, so the AVL cannot be searched
+        by id alone: the hash indexes (event_index, archived, deleted_ids)
+        answer in O(1) and give the current key; then one AVL search by that
+        key measures the access cost (depth + 1 nodes visited).
+        """
+        event = self.event_index.get(event_id)
+        if event is not None:
+            key = event.build_key()
+            node, visited = self.avl.search(key)
+            return {
+                "event_id": event_id, "status": "active",
+                "event": event.to_dict(), "key": str(key),
+                "depth": visited - 1 if node else None,
+                "access_cost": visited,
+                "height": node.height if node else None,
+                "balance_factor": node.balance_factor if node else None,
+            }
+        if event_id in self.archived:
+            return {"event_id": event_id, "status": "archived",
+                    "event": self.archived[event_id].to_dict()}
+        if event_id in self.deleted_ids:
+            return {"event_id": event_id, "status": "deleted", "event": None}
+        return {"event_id": event_id, "status": "unknown", "event": None}
 
     def snapshot(self) -> dict:
         """Full independent copy of the state, including the exact tree topology.
@@ -152,6 +181,7 @@ class Scenario:
                 "reports_processed": self.total_reports_processed,
                 "corrections": self.total_corrections,
                 "archives": self.total_archives,
+                "archive_operations": self.total_archive_operations,
                 "reports_discarded": self.total_reports_discarded,
                 "conflicts": self.total_conflicts,
                 "confirmations": self.total_confirmations,
@@ -268,6 +298,30 @@ class Scenario:
         return event
 
     # --- Eliminar evento ---
+
+    def preview_delete(self, event_id: int) -> dict:
+        """What deleting an event will do, shown before running it (Section 6).
+
+        Read only. Lists the node's current descendants, which stay active
+        (unlike archiving a branch, Section 10), and the events that use it as
+        reference, whose association is recalculated after the deletion.
+        """
+        event = self.get_event(event_id)
+        if not event:
+            raise ValueError(f"Evento {event_id} no encontrado entre los activos")
+        key = event.build_key()
+        node, visited = self.avl.search(key)
+        descendants = [i for i in self.avl.collect_subtree_ids(node) if i != event_id]
+        dependents = sorted(e.event_id for e in list(self.event_index.values())
+                            + list(self.archived.values())
+                            if e.reference_event_id == event_id)
+        return {
+            "event": event.to_dict(),
+            "key": str(key),
+            "depth": visited - 1,
+            "descendants": descendants,
+            "dependents": dependents,
+        }
 
     def delete_event(self, event_id: int) -> SeismicEvent:
         event = self.get_event(event_id)
@@ -569,6 +623,8 @@ class Scenario:
             self.archived[eid] = event
             count += 1
         self.total_archives += count
+        if count:
+            self.total_archive_operations += 1
         # Recalcular asociaciones: los activos que referenciaban nodos ahora
         # archivados deben actualizarse (igual que delete_event lo hace).
         self.recalculate_all_associations()
@@ -1137,10 +1193,14 @@ class Scenario:
         }
 
     def compare_current_trees(self) -> dict:
+        """Compare the scenario's own AVL and BST (Sections 11 and 15).
+
+        Both trees hold the same keys and received the same operations in the
+        same order, so they are compared as they are. Rebuilding them from the
+        sorted keys would always describe the worst-case BST (a chain), not
+        the one the user sees in the BST tab.
         """
-        Compara las estructuras AVL y BST del escenario actual.
-        """
-        keys = self.avl.inorder()
-        from core.avl_tree import compare_trees
-        return compare_trees(keys)
+        comparison = compare_loaded_trees(self)
+        comparison["size"] = comparison["events"]
+        return comparison
 

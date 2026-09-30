@@ -44,6 +44,15 @@ def has_max_one_decimal(value: float) -> bool:
     return abs(tenths - round(tenths)) < 1e-9
 
 
+def normalize_tenths(value: float) -> float:
+    """Remove float noise (0.30000000000000004 -> 0.3) from a value that
+    already has at most one decimal. Any other value is returned unchanged,
+    so validation still sees 4.46 and rejects it instead of storing 4.5."""
+    if math.isfinite(value) and has_max_one_decimal(value):
+        return round(value, 1)
+    return value
+
+
 # =====================================================================
 # Enumeraciones
 # =====================================================================
@@ -75,8 +84,8 @@ class Epicenter:
     __slots__ = ("x", "y")
 
     def __init__(self, x: float, y: float) -> None:
-        self.x: float = round(x, 1)
-        self.y: float = round(y, 1)
+        self.x: float = normalize_tenths(x)
+        self.y: float = normalize_tenths(y)
 
     def distance_to(self, other: "Epicenter") -> float:
         return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
@@ -190,8 +199,8 @@ class Report:
         self.event_id: int = event_id
         self.revision: int = revision
         self.station_id: str = station_id
-        self.magnitude: float = round(magnitude, 1)
-        self.depth_km: float = round(depth_km, 1)
+        self.magnitude: float = normalize_tenths(magnitude)
+        self.depth_km: float = normalize_tenths(depth_km)
         self.epicenter: Epicenter = epicenter
         self.occurrence_time: datetime = occurrence_time
 
@@ -269,8 +278,8 @@ class SeismicEvent:
                  epicenter: Epicenter, occurrence_time: datetime, station_id: str,
                  zones: list[Zone], revision: int = 1) -> None:
         self.event_id: int = event_id
-        self.magnitude: float = round(magnitude, 1)
-        self.depth_km: float = round(depth_km, 1)
+        self.magnitude: float = normalize_tenths(magnitude)
+        self.depth_km: float = normalize_tenths(depth_km)
         self.epicenter: Epicenter = epicenter
         self.occurrence_time: datetime = occurrence_time
         self.revision: int = revision
@@ -319,9 +328,9 @@ class SeismicEvent:
         if zones is None:
             zones = []
         if magnitude is not None:
-            self.magnitude = round(magnitude, 1)
+            self.magnitude = normalize_tenths(magnitude)
         if depth_km is not None:
-            self.depth_km = round(depth_km, 1)
+            self.depth_km = normalize_tenths(depth_km)
         if epicenter is not None:
             self.epicenter = epicenter
         if occurrence_time is not None:
@@ -360,8 +369,8 @@ class SeismicEvent:
     def from_dict(cls, data: dict, zones: list[Zone]) -> "SeismicEvent":
         event = cls.__new__(cls)
         event.event_id = data["event_id"]
-        event.magnitude = round(data["magnitude"], 1)
-        event.depth_km = round(data["depth_km"], 1)
+        event.magnitude = normalize_tenths(data["magnitude"])
+        event.depth_km = normalize_tenths(data["depth_km"])
         event.epicenter = Epicenter.from_dict(data["epicenter"])
         event.occurrence_time = parse_time(data["occurrence_time"])
         event.revision = data.get("revision", 1)

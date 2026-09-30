@@ -41,7 +41,8 @@ _SCENARIO_METRICS = {
     "total_events_created": "events_created",
     "total_reports_processed": "reports_processed",
     "total_corrections": "corrections",
-    "total_archives": "archives",
+    "total_archives": "archives",                       # events archived (cumulative)
+    "total_archive_operations": "archive_operations",   # mass-archive operations
     "total_reports_discarded": "reports_discarded",
     "total_conflicts": "conflicts",
     "total_confirmations": "confirmations",
