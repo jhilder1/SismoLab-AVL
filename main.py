@@ -73,13 +73,28 @@ def create_event(event_id, magnitude, depth_km, epicenter_x, epicenter_y,
 
 
 @eel.expose
-def correct_event(event_id, magnitude=None, depth_km=None):
-    """Corrects the magnitude and/or depth of an event."""
+def correct_event(event_id, magnitude=None, depth_km=None, epicenter_x=None,
+                  epicenter_y=None, occurrence_time_str=None):
+    """Corrects one or several data of an active event (Section 6): magnitude,
+    depth, epicenter and/or occurrence time. An empty field keeps its value."""
+    def number(value):
+        return float(value) if value not in (None, "", "null") else None
+
     try:
-        mag = float(magnitude) if magnitude not in (None, "", "null") else None
-        dep = float(depth_km) if depth_km not in (None, "", "null") else None
-        event = sc.correct_event(int(event_id), magnitude=mag, depth_km=dep)
-        return {"ok": True, "message": f"Evento {event.format_id()} corregido a M={event.magnitude} (rev={event.revision})"}
+        changes = {
+            "magnitude": number(magnitude),
+            "depth_km": number(depth_km),
+            "epicenter_x": number(epicenter_x),
+            "epicenter_y": number(epicenter_y),
+            "occurrence_time": parse_time(occurrence_time_str) if occurrence_time_str else None,
+        }
+        if all(value is None for value in changes.values()):
+            return {"ok": False, "message": "Indica al menos un dato a corregir"}
+        event = sc.correct_event(int(event_id), **changes)
+        return {"ok": True, "message": (
+            f"Evento {event.format_id()} corregido (rev {event.revision}): M={event.magnitude}, "
+            f"H={event.depth_km} km, epicentro=({event.epicenter.x}, {event.epicenter.y}), "
+            f"prioridad {event.priority.name}")}
     except Exception as e:
         return {"ok": False, "message": str(e)}
 
@@ -185,9 +200,14 @@ def mark_reviewed(event_id):
 def advance_clock(hours):
     """Moves the simulation clock forward (an undoable action)."""
     try:
-        clock = sc.advance_clock(float(hours))
+        hours = float(hours)
+    except (TypeError, ValueError):
+        return {"ok": False, "clock": sc.clock.isoformat(),
+                "message": f"Las horas a avanzar deben ser un número, se recibió {hours!r}"}
+    try:
+        clock = sc.advance_clock(hours)
         return {"ok": True, "clock": clock.isoformat()}
-    except Exception as e:
+    except (ValueError, OverflowError) as e:
         return {"ok": False, "message": str(e), "clock": sc.clock.isoformat()}
 
 

@@ -23,7 +23,7 @@ Se abre una ventana con la interfaz. Cerrar la ventana detiene el programa.
 
 ## Pruebas
 
-Todas las pruebas, solo con Python (174 pruebas):
+Todas las pruebas, solo con Python (186 pruebas):
 
 ```
 python -m unittest discover -s tests
@@ -51,6 +51,7 @@ La evidencia de la sección 16 (resultados esperados y obtenidos) se imprime con
 | `tests/test_review_fixes.py` | Fallas de la revisión: decimales, comparativa AVL/BST, consulta completa del evento, vista previa al eliminar, regla de archivo y pausa de la cola (secciones 3, 6, 8, 10, 11, 14) |
 | `tests/test_section16_cases.py` | Los casos de la sección 16 con los archivos de `data/test_cases_section16/`, ráfagas de reportes y el cargador de ráfagas (sección 8) |
 | `tests/test_queries_indicators.py` | Consultas de la sección 11 (poda por K, profundidad y fechas, acceso costoso) contra un recorrido completo, e indicadores y registro de acciones de la sección 14 |
+| `tests/test_audit_and_correction.py` | Reporte por evento inconsistente de Verificar estructura (sección 14), corrección de epicentro y fecha (sección 6), reloj por horas (sección 3) y tooltips del árbol (sección 15) |
 | `tests/test_audit_associations.py` | `run_audit` detecta una referencia que existe pero viola magnitud/tiempo/W/R, y ciclos en la cadena de referencias (sección 14 sobre sección 7) |
 
 ## Arquitectura

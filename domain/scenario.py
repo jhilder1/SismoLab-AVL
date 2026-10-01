@@ -877,49 +877,65 @@ class Scenario:
         against `is_valid`; in normal mode every such factor is still a real
         error, exactly as before. `is_avl` reports whether the tree currently
         has the AVL property, independently of the mode.
+
+        Every check yields (event_id, problem). `errors` lists the problems;
+        `report` groups them by event, one entry per inconsistent event, as
+        Section 14 asks ("un reporte por evento inconsistente").
         """
         tree_report = check_tree(self.avl)
-        errors = list(tree_report["order"]) + list(tree_report["metadata"])
-        errors += self._audit_unique_ids()
-        errors += self._audit_index_consistency()
-        errors += self._audit_associations()
+        issues = list(tree_report["by_event"])
+        issues += self._audit_unique_ids()
+        issues += self._audit_index_consistency()
+        issues += self._audit_associations()
 
         unbalanced = tree_report["unbalanced"]
         if not self.avl.stress_mode:
-            errors += [f"Evento {event_id}: factor de balance {bf} (fuera de {{-1,0,1}})"
+            issues += [(event_id, f"Evento {event_id}: factor de balance {bf} (fuera de {{-1,0,1}})")
                        for event_id, bf in unbalanced]
+        errors = [problem for _, problem in issues]
 
         return {
             "is_valid": len(errors) == 0,
             "is_avl": len(unbalanced) == 0,
             "errors": errors,
+            "report": self._audit_report(issues),
             "nodes_checked": self.avl.size,
             "stress_mode": self.avl.stress_mode,
             "unbalanced_nodes": [{"event_id": event_id, "balance_factor": bf}
                                  for event_id, bf in unbalanced],
         }
 
-    def _audit_unique_ids(self) -> list[str]:
+    def _audit_report(self, issues: list[tuple[int, str]]) -> list[dict]:
+        """One entry per inconsistent event, ordered by id, with every problem
+        found for it and where the event is (active, archived or deleted)."""
+        problems: dict[int, list[str]] = {}
+        for event_id, problem in issues:
+            problems.setdefault(event_id, []).append(problem)
+        return [{"event_id": event_id, "status": self.lookup_event(event_id)["status"],
+                 "problems": found}
+                for event_id, found in sorted(problems.items())]
+
+    def _audit_unique_ids(self) -> list[tuple[int, str]]:
         errors = []
         ids = self.avl.get_all_event_ids()
         seen = set()
         for eid in ids:
             if eid in seen:
-                errors.append(f"ID duplicado en AVL: {eid}")
+                errors.append((eid, f"ID duplicado en AVL: {eid}"))
             seen.add(eid)
         return errors
 
-    def _audit_index_consistency(self) -> list[str]:
+    def _audit_index_consistency(self) -> list[tuple[int, str]]:
         errors = []
         avl_ids = set(self.avl.get_all_event_ids())
         index_ids = set(self.event_index.keys())
         for eid in avl_ids - index_ids:
-            errors.append(f"ID {eid} en AVL pero no en event_index")
+            errors.append((eid, f"ID {eid} en AVL pero no en event_index"))
         for eid in index_ids - avl_ids:
-            errors.append(f"ID {eid} en event_index pero no en AVL")
+            errors.append((eid, f"ID {eid} en event_index pero no en AVL"))
         return errors
 
-    def _audit_associations(self) -> list[str]:
+    def _audit_associations(self) -> list[tuple[int, str]]:
         """Check every stored reference against the same four conditions
         _find_candidates applies when an association is (re)computed: the
         referenced event must have strictly greater magnitude, have occurred
@@ -955,36 +971,37 @@ class Scenario:
             origin = "archivado" if event_id in self.archived else "activo"
             ref = all_events.get(ref_id)
             if ref is None:
-                errors.append(f"Evento {origin} {event_id} referencia a ID "
-                              f"inexistente/eliminado: {ref_id}")
+                errors.append((event_id, f"Evento {origin} {event_id} referencia a ID "
+                                         f"inexistente/eliminado: {ref_id}"))
                 continue
             if ref.magnitude <= event.magnitude:
-                errors.append(
+                errors.append((event_id,
                     f"Evento {origin} {event_id} (M={event.magnitude}) referencia a "
-                    f"{ref_id} (M={ref.magnitude}): la referencia no tiene magnitud mayor")
+                    f"{ref_id} (M={ref.magnitude}): la referencia no tiene magnitud mayor"))
             if ref.occurrence_time >= event.occurrence_time:
-                errors.append(
+                errors.append((event_id,
                     f"Evento {origin} {event_id} referencia a {ref_id}, que no ocurrió "
-                    f"estrictamente antes")
+                    f"estrictamente antes"))
             else:
                 delta = event.occurrence_time - ref.occurrence_time
                 if delta > timedelta(hours=self.W_hours):
-                    errors.append(
+                    errors.append((event_id,
                         f"Evento {origin} {event_id} referencia a {ref_id} fuera de la "
-                        f"ventana W={self.W_hours}h (diferencia real: {delta})")
+                        f"ventana W={self.W_hours}h (diferencia real: {delta})"))
             dist = event.epicenter.distance_to(ref.epicenter)
             if dist > self.R_km:
-                errors.append(
+                errors.append((event_id,
                     f"Evento {origin} {event_id} referencia a {ref_id} a distancia "
-                    f"{dist:.2f}km, fuera de R={self.R_km}km")
+                    f"{dist:.2f}km, fuera de R={self.R_km}km"))
 
         errors += self._audit_association_cycles(all_events)
         return errors
 
-    def _audit_association_cycles(self, all_events: dict[int, SeismicEvent]) -> list[str]:
+    def _audit_association_cycles(self, all_events: dict[int, SeismicEvent]) -> list[tuple[int, str]]:
         """Cycle detection over the reference graph (each event has at most
         one outgoing reference_event_id, so this is a functional graph: one
-        pass with a 3-color mark, O(n) total, no recursion)."""
+        pass with a 3-color mark, O(n) total, no recursion). A cycle is
+        reported once, under its smallest id."""
         errors = []
         UNVISITED, IN_PATH, DONE = 0, 1, 2
         state = {eid: UNVISITED for eid in all_events}
@@ -1002,8 +1019,8 @@ class Scenario:
 
             if current is not None and state.get(current) == IN_PATH:
                 cycle = path[path.index(current):] + [current]
-                errors.append("Ciclo de referencias: "
-                              + " -> ".join(str(c) for c in cycle))
+                errors.append((min(cycle), "Ciclo de referencias: "
+                               + " -> ".join(str(c) for c in cycle)))
 
             for node in path:
                 state[node] = DONE

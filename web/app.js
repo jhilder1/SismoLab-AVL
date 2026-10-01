@@ -165,6 +165,7 @@ function showTree(view) {
     $("tab-queue").classList.toggle("active", view === "queue");
     $("tab-history").classList.toggle("active", view === "history");
     $("tab-indicators").classList.toggle("active", view === "indicators");
+    $("tab-audit").classList.toggle("active", view === "audit");
     drawCurrentTree();
 }
 
@@ -175,7 +176,8 @@ function drawCurrentTree() {
     const isQueue = treeView === "queue";
     const isHistory = treeView === "history";
     const isIndicators = treeView === "indicators";
-    const isTree = !isMap && !isQueries && !isQueue && !isHistory && !isIndicators;
+    const isAudit = treeView === "audit";
+    const isTree = !isMap && !isQueries && !isQueue && !isHistory && !isIndicators && !isAudit;
     $("tree-svg").style.display = isTree ? "block" : "none";
     $("map-svg").style.display = isMap ? "block" : "none";
     $("map-legend").style.display = isMap ? "flex" : "none";
@@ -183,7 +185,14 @@ function drawCurrentTree() {
     $("queue-panel").style.display = isQueue ? "flex" : "none";
     $("history-panel").style.display = isHistory ? "flex" : "none";
     $("indicators-panel").style.display = isIndicators ? "flex" : "none";
+    $("audit-panel").style.display = isAudit ? "flex" : "none";
     $("tree-empty").style.display = "none";
+
+    if (isAudit) {
+        $("tree-root").textContent = "Verificar estructura (Seccion 14)";
+        refreshAudit();
+        return;
+    }
 
     if (isIndicators) {
         // Redrawn on every refresh so the values follow each action live.
@@ -240,15 +249,15 @@ function generateTreeSvgHtml(treeData, treeViewType) {
     let minX = Infinity, maxX = -Infinity, maxY = 0;
 
     let column = 0;
-    function layout(node, depth) {
+    function layout(node, depth, parent) {
         if (!node) return null;
-        const left = layout(node.left, depth + 1);
+        const left = layout(node.left, depth + 1, node);
         const x = column * (NODE_R * 2 + H_GAP);
         column++;
         const y = depth * V_GAP + NODE_R + 10;
-        const right = layout(node.right, depth + 1);
+        const right = layout(node.right, depth + 1, node);
 
-        positions.push({ x, y, node });
+        positions.push({ x, y, node, depth, parent });
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y > maxY) maxY = y;
@@ -258,7 +267,7 @@ function generateTreeSvgHtml(treeData, treeViewType) {
         return { x, y };
     }
 
-    layout(treeData.nodes, 0);
+    layout(treeData.nodes, 0, null);
 
     const svgW = maxX - minX + NODE_R * 4;
     const svgH = maxY + NODE_R * 2 + 10;
@@ -287,6 +296,7 @@ function generateTreeSvgHtml(treeData, treeViewType) {
             strokeW = 3;
         }
 
+        html += `<g class="tree-node"><title>${esc(nodeTooltip(n, p.depth, p.parent, treeViewType))}</title>`;
         html += `<circle class="node-circle" cx="${cx}" cy="${cy}" r="${NODE_R}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
 
         if (treeViewType === "avl" && costlyIds.has(n.event_id)) {
@@ -300,8 +310,25 @@ function generateTreeSvgHtml(treeData, treeViewType) {
             const bfColor = Math.abs(n.bf) > 1 ? "#ff1744" : "var(--yellow)";
             html += `<text class="node-bf" x="${cx}" y="${cy - NODE_R - 4}" fill="${bfColor}">${n.bf}</text>`;
         }
+        html += `</g>`;
     }
     return { empty: false, svgW, svgH, html };
+}
+
+// Section 15: hovering a node shows its whole key and its links, besides the
+// id and magnitude drawn on it.
+function nodeTooltip(n, depth, parent, treeType) {
+    const link = child => child ? formatEventId(child.event_id) : "vacio";
+    const lines = [
+        `${formatEventId(n.event_id)}   K = ${n.key}`,
+        `Padre: ${parent ? formatEventId(parent.event_id) : "ninguno (raiz)"}`
+            + ` | Izquierdo: ${link(n.left)} | Derecho: ${link(n.right)}`,
+        `Profundidad ${depth} | Altura ${n.height}` + (typeof n.bf === "number" ? ` | FB ${n.bf}` : ""),
+    ];
+    if (treeType === "avl" && costlyIds.has(n.event_id)) {
+        lines.push(`Acceso costoso: prioridad alta y profundidad ${depth} > L = ${limitL}`);
+    }
+    return lines.join("\n");
 }
 
 function updateTree(treeData) {
@@ -405,10 +432,11 @@ async function createEvent() {
     if (res.ok) refresh();
 }
 
+// Section 6: a correction replaces one or several data; an empty field keeps
+// its value. datetime-local gives local text without zone, read as UTC.
 async function correctEvent() {
-    const mag = val("cor-mag") || null;
-    const dep = val("cor-depth") || null;
-    const res = await eel.correct_event(val("cor-id"), mag, dep)();
+    const fields = ["cor-mag", "cor-depth", "cor-x", "cor-y", "cor-time"].map(id => val(id) || null);
+    const res = await eel.correct_event(val("cor-id"), ...fields)();
     log(res.message, res.ok ? "ok" : "err");
     if (res.ok) refresh();
 }
@@ -782,7 +810,8 @@ async function toggleStress() {
 
     let msg = res.message || ("Modo estres: " + (res.stress_mode ? "ACTIVADO" : "desactivado"));
     if (res.errors && res.errors.length) {
-        msg += ` (${res.errors.length} problema(s) en la auditoria; el primero: ${res.errors[0]})`;
+        msg += ` (${res.errors.length} problema(s) en la auditoria; el primero: ${res.errors[0]}. `
+            + `Detalle completo en Verificar estructura)`;
     }
     if (paused) msg += " " + RESUME_HINT;
     log(msg, res.stress_mode ? "err" : "ok");
@@ -804,32 +833,68 @@ async function recoverBalance() {
     refresh();
 }
 
+// Section 14: "Verificar estructura" opens the Auditoria tab, which shows one
+// report per inconsistent event. While the tab is open it is checked again
+// on every refresh, so it never shows the result of an older tree.
 async function runAudit() {
-    const res = await eel.run_audit()();
-    if (res.is_valid) {
-        // Section 14: in stress mode the imbalance is expected, so it is
-        // reported apart from order and metadata errors (none were found).
-        const unbalanced = res.unbalanced_nodes || [];
-        const worst = unbalanced.reduce((m, n) => Math.max(m, Math.abs(n.balance_factor)), 0);
-        const balanceText = unbalanced.length
-            ? `Desbalance esperado del modo estrés: ${unbalanced.length} nodo(s) con factor fuera de {-1, 0, 1} `
-              + `(el mayor |FB| = ${worst}). Usa Recuperar Balance.`
-            : "Todos los factores de balance están en {-1, 0, 1}: el árbol cumple la propiedad AVL.";
-        const msg = `✅ Auditoría OK\n\n${res.nodes_checked} nodos verificados.\n`
-            + `0 errores de orden, alturas, identificadores ni referencias.\n\n${balanceText}`;
-        log(`Auditoria OK: ${res.nodes_checked} nodos verificados, 0 errores`
-            + (unbalanced.length ? ` | ${unbalanced.length} nodo(s) desbalanceado(s) por el modo estres` : ""), "ok");
-        alert(msg);
-    } else {
-        const msg = `❌ Auditoría FALLÓ\n\nSe encontraron ${res.errors.length} error(es) en el árbol.\n\nDetalle del primer error:\n${res.errors[0]}`;
-        log(`Auditoria FALLO: ${res.errors.length} error(es)`, "err");
-        alert(msg);
-    }
+    if (treeView !== "audit") showTree("audit");
+    const res = await refreshAudit();
+    const unbalanced = res.unbalanced_nodes.length;
+    log(res.is_valid
+        ? `Verificacion OK: ${res.nodes_checked} nodos, 0 errores`
+          + (res.stress_mode && unbalanced ? ` | ${unbalanced} nodo(s) desbalanceado(s) por el modo estres` : "")
+        : `Verificacion: ${res.report.length} evento(s) inconsistente(s), ${res.errors.length} problema(s)`,
+        res.is_valid ? "ok" : "err");
 }
 
+async function refreshAudit() {
+    const res = await eel.run_audit()();
+    renderAudit(res);
+    return res;
+}
+
+function renderAudit(res) {
+    const summary = $("audit-summary");
+    summary.textContent = `${res.nodes_checked} nodos verificados | modo ${res.stress_mode ? "estres" : "normal"} `
+        + `| eventos inconsistentes: ${res.report.length} | problemas: ${res.errors.length}`;
+    summary.classList.remove("hidden");
+
+    let html = res.is_valid
+        ? `<div class="audit-verdict ok">Sin errores de orden global por K, unicidad, referencias, alturas
+            ni factores de balance${res.stress_mode ? " (aparte del desbalance esperado del modo estres)" : ""}.</div>`
+        : `<div class="audit-verdict bad">Se encontraron problemas en ${res.report.length} evento(s).</div>`;
+
+    if (res.report.length) {
+        html += `<h4>Reporte por evento inconsistente</h4>` + res.report.map(r => `<div class="audit-entry">
+            <div class="audit-head">${formatEventId(r.event_id)} ${statusBadgeHtml(r.status)}</div>
+            <ul>${r.problems.map(problem => `<li>${esc(problem)}</li>`).join("")}</ul>
+        </div>`).join("");
+    }
+
+    const unbalanced = res.unbalanced_nodes;
+    if (res.stress_mode && unbalanced.length) {
+        const worst = unbalanced.reduce((m, n) => Math.max(m, Math.abs(n.balance_factor)), 0);
+        html += `<h4>Desbalance esperado del modo estres</h4>
+            <p class="audit-text">${unbalanced.length} nodo(s) con factor fuera de {-1, 0, 1}, el mayor |FB| = ${worst}.
+            No es un error en modo estres: Recuperar Balance lo corrige.</p>
+            <div class="audit-unbalanced">${unbalanced.map(n =>
+                `${formatEventId(n.event_id)} (FB ${n.balance_factor})`).join(" · ")}</div>`;
+    } else if (res.is_avl) {
+        html += `<p class="audit-text">Todos los factores de balance estan en {-1, 0, 1}: el arbol cumple la propiedad AVL.</p>`;
+    }
+    html += `<p class="ind-note">Se verifica el orden global por K (el inorden debe ser estrictamente creciente, no
+        solo cada hijo frente a su padre), la unicidad de los IDs, que el AVL y el indice por ID tengan los mismos
+        eventos, las alturas y factores de balance recalculados, y que cada referencia cumpla la seccion 7 sin
+        formar ciclos.</p>`;
+    $("audit-report").innerHTML = html;
+}
+
+// Section 3: the clock only moves forward, by the hours the user asks for.
 async function advanceClock() {
-    const res = await eel.advance_clock(1)();
-    log("Reloj avanzado a " + res.clock.replace("T", " "), "info");
+    const hours = val("clock-hours");
+    const res = await eel.advance_clock(hours)();
+    if (!res.ok) { log(res.message, "err"); return; }
+    log(`Reloj avanzado ${hours} h, hasta ${res.clock.replace("T", " ")}`, "info");
     refresh();
 }
 

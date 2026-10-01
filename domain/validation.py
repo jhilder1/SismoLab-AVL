@@ -117,12 +117,14 @@ def check_tree(tree, stored: Optional[dict[int, dict]] = None) -> dict:
     Without it the heights kept in the nodes are compared (audit).
     Iterative walks, so a degenerate tree of any size cannot overflow the stack.
 
-    Returns {"order": [...], "metadata": [...], "unbalanced": [(event_id, bf)]}.
+    Returns {"order": [...], "metadata": [...], "unbalanced": [(event_id, bf)],
+    "by_event": [(event_id, problem)]}: the same order and metadata problems,
+    each with the event it belongs to (the audit groups them per event).
     """
-    metadata_problems: list[str] = []
+    metadata_problems: list[tuple[int, str]] = []
     unbalanced: list[tuple[int, int]] = []
 
-    order_problems = check_order(tree.root)
+    order_problems = check_order_detail(tree.root)
 
     # Heights bottom-up (empty tree = -1, leaf = 0) and balance factors.
     heights: dict[int, int] = {}
@@ -136,16 +138,19 @@ def check_tree(tree, stored: Optional[dict[int, dict]] = None) -> dict:
         saved = stored.get(node.event_id, {}) if stored is not None else None
         saved_height = saved.get("height") if saved is not None else node.height
         if saved_height != height:
-            metadata_problems.append(f"Event {node.event_id}: stored height "
-                                     f"{saved_height}, recalculated {height}")
+            metadata_problems.append((node.event_id, f"Event {node.event_id}: stored height "
+                                                     f"{saved_height}, recalculated {height}"))
         if saved is not None and saved.get("balance_factor") != balance:
-            metadata_problems.append(f"Event {node.event_id}: stored balance factor "
-                                     f"{saved.get('balance_factor')}, recalculated {balance}")
+            metadata_problems.append((node.event_id, f"Event {node.event_id}: stored balance "
+                                                     f"factor {saved.get('balance_factor')}, "
+                                                     f"recalculated {balance}"))
         if abs(balance) > 1:
             unbalanced.append((node.event_id, balance))
 
-    return {"order": order_problems, "metadata": metadata_problems,
-            "unbalanced": unbalanced}
+    return {"order": [message for _, message in order_problems],
+            "metadata": [message for _, message in metadata_problems],
+            "unbalanced": unbalanced,
+            "by_event": order_problems + metadata_problems}
 
 
 def check_order(root) -> list[str]:
@@ -154,7 +159,12 @@ def check_order(root) -> list[str]:
     Checking each child against its parent is not enough (Section 14): a key
     can sit on the correct side of its parent and the wrong side of an ancestor.
     """
-    problems: list[str] = []
+    return [message for _, message in check_order_detail(root)]
+
+
+def check_order_detail(root) -> list[tuple[int, str]]:
+    """check_order with the id of the event that breaks the order."""
+    problems: list[tuple[int, str]] = []
     previous = None
     stack, node = [], root
     while stack or node:
@@ -163,9 +173,9 @@ def check_order(root) -> list[str]:
             node = node.left
         node = stack.pop()
         if previous is not None and not previous.key < node.key:
-            problems.append(
+            problems.append((node.event_id,
                 f"Event {node.event_id} with key {node.key} breaks the global order: "
-                f"it follows event {previous.event_id} with key {previous.key}")
+                f"it follows event {previous.event_id} with key {previous.key}"))
         previous = node
         node = node.right
     return problems

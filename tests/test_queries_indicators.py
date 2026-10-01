@@ -357,11 +357,6 @@ class IndicatorsUiTest(unittest.TestCase):
             sc.load_burst_file(os.path.join(bursts, "rafaga-invalida.json"))
         data["burst_bad"] = {"ok": False, "file": "rafaga-invalida.json",
                              "message": "Archivo rechazado", "problems": ctx.exception.problems}
-        degraded = Scenario()
-        degraded.load_scenario_file(os.path.join(ROOT, "data", "test_cases_section16",
-                                                  "caso4-rotaciones-recuperacion",
-                                                  "estres-degradado.json"))
-        data["audit_stress"] = degraded.run_audit()
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "ui_data.json")
             with open(path, "w", encoding="utf-8") as handle:

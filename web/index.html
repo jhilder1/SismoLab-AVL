@@ -24,7 +24,10 @@
         </div>
         <div class="header-right">
             <span id="stress-badge" class="badge badge-off">Normal</span>
-            <button onclick="advanceClock()" class="btn btn-sm">Avanzar Reloj +1h</button>
+            <label class="clock-step" title="Horas que avanza el reloj de simulacion">
+                <input type="number" id="clock-hours" value="1" min="0.1" step="any"> h
+            </label>
+            <button onclick="advanceClock()" class="btn btn-sm">Avanzar reloj</button>
         </div>
     </header>
 
@@ -84,6 +87,14 @@
                     <input type="number" id="cor-mag" placeholder="Nueva magnitud" step="0.1">
                     <input type="number" id="cor-depth" placeholder="Nueva prof." step="0.1">
                 </div>
+                <div class="form-row">
+                    <input type="number" id="cor-x" placeholder="Nuevo epicentro X" step="0.1">
+                    <input type="number" id="cor-y" placeholder="Nuevo epicentro Y" step="0.1">
+                </div>
+                <label class="param">Nueva fecha y hora de ocurrencia (UTC)
+                    <input type="datetime-local" id="cor-time" step="1">
+                </label>
+                <p class="form-hint">Los campos vacios conservan su valor.</p>
                 <button onclick="correctEvent()" class="btn btn-warn full-w">Corregir</button>
             </section>
 
@@ -146,7 +157,9 @@
                 <div class="form-row">
                     <button onclick="undoAction()" class="btn btn-warn">Deshacer</button>
                     <button onclick="redoAction()" class="btn btn-warn">Rehacer</button>
-                    <button onclick="runAudit()" class="btn btn-info">Auditar</button>
+                </div>
+                <div class="form-row">
+                    <button onclick="runAudit()" class="btn btn-info full-w">Verificar estructura</button>
                 </div>
                 <div class="form-row">
                     <button onclick="toggleStress()" class="btn btn-danger">Modo Estres</button>
@@ -193,6 +206,7 @@
                     <button id="tab-queue" onclick="showTree('queue')" class="btn btn-sm tab">Cola</button>
                     <button id="tab-history" onclick="showTree('history')" class="btn btn-sm tab">Histórico</button>
                     <button id="tab-indicators" onclick="showTree('indicators')" class="btn btn-sm tab">Indicadores</button>
+                    <button id="tab-audit" onclick="showTree('audit')" class="btn btn-sm tab">Auditoria</button>
                 </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
@@ -285,6 +299,15 @@
 
                 <div id="history-panel" class="history-panel" style="display:none">
                     <div id="archived-list" class="archived-list" style="padding: 1rem;"></div>
+                </div>
+
+                <!-- Structure audit (Section 14): one report per inconsistent event -->
+                <div id="audit-panel" class="indicators-panel" style="display:none">
+                    <div class="queue-controls">
+                        <button onclick="window.runAudit()" class="btn btn-info">Verificar estructura</button>
+                    </div>
+                    <div id="audit-summary" class="query-cost hidden"></div>
+                    <div id="audit-report"><p class="muted">Pulsa Verificar estructura para revisar el arbol.</p></div>
                 </div>
 
                 <!-- Indicators (Section 14) -->

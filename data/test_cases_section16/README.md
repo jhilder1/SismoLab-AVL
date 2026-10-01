@@ -89,8 +89,8 @@ acciones (pestaña Indicadores) muestran:
    claves ascendentes.
 4. **Procesar continuo**. El árbol se degrada en una cadena a la derecha, con
    altura 9 y factores de balance de hasta -7 (desbalance mayor que 2).
-   **Auditar** informa 0 errores de orden y metadatos, y aparte el
-   desbalance esperado del modo estrés.
+   **Verificar estructura** (pestaña Auditoría) informa 0 errores de orden y
+   metadatos, y aparte el desbalance esperado del modo estrés.
    `estres-degradado.json` guarda este mismo estado, por si se quiere cargar
    directamente.
 5. **Recuperar Balance**: RR = 8 y RL = 2, altura final 4. Se conservan los 13
