@@ -1,13 +1,13 @@
 """
-Test para verificar que la nueva estructura core/ y domain/ funciona.
-Replica los tests clave de las estructuras y servicios originales.
+Tests that the core/ and domain/ structure works.
+Repeats the key tests of the original structures and services.
 """
 
 import sys
 import os
 from datetime import datetime, timedelta
 
-# Agregar la raíz del proyecto al path
+# Put the project root on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.avl_tree import TreeKey, AVLTree, BSTTree
@@ -20,7 +20,7 @@ from domain.scenario import Scenario
 
 
 # =====================================================================
-# Tests de TreeKey
+# TreeKey tests
 # =====================================================================
 
 def test_treekey_comparison():
@@ -46,11 +46,11 @@ def test_treekey_serialization():
 
 
 # =====================================================================
-# Tests de AVLTree
+# AVLTree tests
 # =====================================================================
 
 class FakeEvent:
-    """Evento falso para tests del árbol."""
+    """Fake event for the tree tests."""
     def __init__(self, eid, priority=2, magnitude=5.0):
         self.event_id = eid
         self.priority = priority
@@ -111,7 +111,7 @@ def test_avl_to_dict():
 
 
 # =====================================================================
-# Tests de UndoStack y ReportQueue
+# UndoStack and ReportQueue tests
 # =====================================================================
 
 def test_undo_stack():
@@ -134,7 +134,7 @@ def test_report_queue():
 
 
 # =====================================================================
-# Tests de Scenario (integración)
+# Scenario tests (integration)
 # =====================================================================
 
 def _make_scenario():
@@ -207,7 +207,7 @@ def test_scenario_stress_toggle():
 
 
 # =====================================================================
-# Tests de modo estres: salida solo con auditoria en verde (Seccion 8)
+# Stress mode tests: leaving it only with a clean audit (Section 8)
 # =====================================================================
 
 def _degenerate_in_stress(sc, count=8):
@@ -296,7 +296,7 @@ def test_scenario_summary():
 
 
 # =====================================================================
-# Tests de Fase 1: Recorridos, BST, Reactivación, Consultas y Undo
+# Phase 1 tests: traversals, BST, reactivation, queries and undo
 # =====================================================================
 
 def test_avl_all_traversals():
@@ -309,11 +309,11 @@ def test_avl_all_traversals():
 
     preorder_ids = [k.event_id for k in tree.preorder()]
     assert len(preorder_ids) == 7
-    assert preorder_ids[0] == 4  # raíz
+    assert preorder_ids[0] == 4  # root
 
     postorder_ids = [k.event_id for k in tree.postorder()]
     assert len(postorder_ids) == 7
-    assert postorder_ids[-1] == 4  # raíz al final
+    assert postorder_ids[-1] == 4  # root last
 
     level_ids = [k.event_id for k in tree.level_order()]
     assert level_ids == [4, 2, 6, 1, 3, 5, 7]
@@ -330,7 +330,7 @@ def test_bst_features():
     assert bst.count_leaves() >= 2
     node, comps = bst.search(keys[0])
     assert node is not None
-    assert comps == 1  # raíz encontrada en 1 comparación
+    assert comps == 1  # root found in 1 comparison
 
     comp_result = compare_trees(keys)
     assert "avl" in comp_result
@@ -408,7 +408,7 @@ def test_queries_section_11():
 
 
 # =====================================================================
-# Ejecutar todos los tests
+# Run every test
 # =====================================================================
 
 

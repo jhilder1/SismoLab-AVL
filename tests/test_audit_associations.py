@@ -142,3 +142,14 @@ def test_parameter_shrink_recalculates_and_audit_stays_clean():
     audit = sc.run_audit()
     assert audit["is_valid"] is True
     assert audit["errors"] == []
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Register the plain test_* functions so `python -m unittest discover` runs them
+    too (pytest finds them by itself)."""
+    import unittest
+    suite = unittest.TestSuite()
+    for name, func in sorted(globals().items()):
+        if name.startswith("test_") and callable(func):
+            suite.addTest(unittest.FunctionTestCase(func, description=name))
+    return suite

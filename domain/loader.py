@@ -1,22 +1,25 @@
 """
-Loader — the two load modes of Section 12.
+Loader — the two load modes of Section 12 and the report bursts of Section 8.
 
 load_topology(sc, data)     Rebuild a saved scenario from its explicit links
                             (root, left, right) without re-inserting anything.
 load_insertions(sc, data)   Insert a sequence of events, in file order, into a
                             balanced AVL and into a plain BST.
+load_burst(sc, data)        Validate a burst of station reports to enqueue (Section 8).
 
-Both work on a temporary scenario and return the new state as a dict. The live
-scenario is only read (defaults, current mode); the caller swaps the state in
-with apply_state, so a rejected file leaves the current scenario untouched.
+The two loads work on a temporary scenario and return the new state as a dict.
+The live scenario is only read (defaults, current mode); the caller swaps the
+state in with apply_state, so a rejected file leaves the current scenario
+untouched. load_burst only validates and builds the reports; the caller
+enqueues them, so a rejected burst leaves the queue untouched too.
 """
 
 from __future__ import annotations
 
 from core.avl_tree import BSTNode
-from domain.models import Epicenter, Priority, SeismicEvent, Station, Zone, parse_time
+from domain.models import Epicenter, Priority, Report, SeismicEvent, Station, Zone, parse_time
 from domain.storage import (
-    FORMAT_INSERTIONS, FORMAT_SCENARIO, SCHEMA_VERSION,
+    FORMAT_BURST, FORMAT_INSERTIONS, FORMAT_SCENARIO, SCHEMA_VERSION,
     StateError, apply_state, scenario_to_dict,
 )
 from domain.validation import (
@@ -428,6 +431,43 @@ def compare_loaded_trees(sc) -> dict:
     }
 
 
+# =====================================================================
+# Report burst (Section 8)
+# =====================================================================
+
+def load_burst(sc, data: dict) -> list[Report]:
+    """Validate a burst of station reports for the current scenario.
+
+    File: {"format": "sismolab-burst", "reports": [...]} with an optional
+    description. Each report: event_id, revision, station_id, magnitude,
+    depth_km, epicenter {x, y} and occurrence_time, checked like
+    enqueue_report (ranges, one decimal, not after the clock, known station).
+    Nothing is decided here: whether a report creates, confirms, corrects or
+    is discarded depends on the scenario when its queue step runs. One bad
+    report rejects the whole file, so the queue never holds half a burst.
+    Returns the reports in file order, which is their receipt order.
+    """
+    _check_format(data, FORMAT_BURST)
+    reports = data.get("reports")
+    if not isinstance(reports, list) or not reports:
+        raise StateError(["reports must be a non-empty list"])
+
+    problems: list[str] = []
+    for position, report in enumerate(reports, start=1):
+        event_id = report.get("event_id") if isinstance(report, dict) else None
+        where = f"Report #{position}" + (f" (id {event_id})" if is_int(event_id) else "")
+        check_event_data(report, sc.clock, where, problems)
+        if not isinstance(report, dict):
+            continue
+        if "revision" not in report:
+            problems.append(f"{where}: missing revision")
+        if report.get("station_id") not in sc.stations:
+            problems.append(f"{where}: unknown station {report.get('station_id')!r}")
+    if problems:
+        raise StateError(problems)
+    return [Report.from_dict(report) for report in reports]
+
+
 def _check_format(data: dict, expected: str) -> None:
     found = data.get("format")
     if found == expected:
@@ -436,4 +476,6 @@ def _check_format(data: dict, expected: str) -> None:
         raise StateError(["This file is an insertion sequence: use 'Cargar por inserciones'"])
     if found == FORMAT_SCENARIO:
         raise StateError(["This file is a saved scenario (topology): use 'Cargar escenario'"])
+    if found == FORMAT_BURST:
+        raise StateError(["This file is a report burst: use 'Cargar rafaga' in the Cola tab"])
     raise StateError([f"Unknown file format {found!r}: expected {expected!r}"])

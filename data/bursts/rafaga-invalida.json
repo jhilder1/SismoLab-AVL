@@ -1,0 +1,54 @@
+{
+  "format": "sismolab-burst",
+  "description": "Rechazada completa: estacion desconocida, magnitud con dos decimales y una ocurrencia posterior al reloj. La cola no cambia.",
+  "reports": [
+    {
+      "event_id": 320,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 4.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 100,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-11T08:00:00Z"
+    },
+    {
+      "event_id": 321,
+      "revision": 1,
+      "station_id": "EST-999",
+      "magnitude": 4.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 100,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-11T08:00:00Z"
+    },
+    {
+      "event_id": 322,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 5.25,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 100,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-11T08:00:00Z"
+    },
+    {
+      "event_id": 323,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 4.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 100,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-13T08:00:00Z"
+    }
+  ]
+}

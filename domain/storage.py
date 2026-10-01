@@ -32,9 +32,10 @@ from domain.models import (
 
 SCHEMA_VERSION = 1
 
-# "format" tells the two load modes of Section 12 apart.
+# "format" tells the two load modes of Section 12 and a report burst apart.
 FORMAT_SCENARIO = "sismolab-scenario"      # full state with explicit topology
 FORMAT_INSERTIONS = "sismolab-insertions"  # plain sequence of events
+FORMAT_BURST = "sismolab-burst"            # station reports to enqueue (Section 8)
 
 # Scenario counters saved under "metrics" (attribute name -> JSON name).
 _SCENARIO_METRICS = {

@@ -1,11 +1,11 @@
 """
-Árbol AVL, BST y clave de comparación K = (P, M, I).
+AVL tree, BST and the comparison key K = (P, M, I).
 
-TreeKey   — tupla (prioridad, magnitud, id) con comparación lexicográfica.
-AVLNode   — nodo del árbol AVL (guarda referencia al evento).
-AVLTree   — árbol AVL auto-balanceado (rotaciones, modo estrés, recuperación).
-BSTNode   — nodo del BST simple (solo clave).
-BSTTree   — BST sin balanceo (para comparación con AVL).
+TreeKey   — tuple (priority, magnitude, id) compared lexicographically.
+AVLNode   — AVL tree node (holds a reference to its event).
+AVLTree   — self-balancing AVL tree (rotations, stress mode, recovery).
+BSTNode   — plain BST node (key only).
+BSTTree   — BST without balancing (to compare with the AVL).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Optional
 # =====================================================================
 
 class TreeKey:
-    """Clave K = (P, M, I) con comparación lexicográfica."""
+    """Key K = (P, M, I) compared lexicographically."""
 
     __slots__ = ("priority", "magnitude", "event_id")
 
@@ -31,7 +31,7 @@ class TreeKey:
     def to_tuple(self) -> tuple[int, float, int]:
         return (self.priority, self.magnitude, self.event_id)
 
-    # --- Comparación ---
+    # --- Comparison ---
     def __lt__(self, other: "TreeKey") -> bool:
         if not isinstance(other, TreeKey):
             return NotImplemented
@@ -88,7 +88,7 @@ class TreeKey:
 # =====================================================================
 
 class AVLNode:
-    """Nodo del árbol AVL."""
+    """AVL tree node."""
 
     __slots__ = ("event", "key", "event_id", "left", "right", "height")
 
@@ -101,7 +101,7 @@ class AVLNode:
         self.height: int = 0
 
     def adopt(self, other: "AVLNode") -> None:
-        """Copia el contenido físico, preservando la identidad del nodo en el árbol."""
+        """Copies the physical content while keeping the node's identity in the tree."""
         self.event = other.event
         self.key = other.key
         self.event_id = other.event_id
@@ -123,7 +123,7 @@ class AVLNode:
 # =====================================================================
 
 class AVLTree:
-    """Árbol AVL que indexa los eventos por su clave TreeKey."""
+    """AVL tree that indexes the events by their TreeKey."""
 
     def __init__(self):
         self.root: Optional[AVLNode] = None
@@ -147,7 +147,7 @@ class AVLTree:
     def height(self) -> int:
         return self.get_height(self.root)
 
-    # --- Inserción (Iterativa) ---
+    # --- Insertion (iterative) ---
 
     def insert(self, event) -> None:
         key = event.build_key()
@@ -174,7 +174,7 @@ class AVLTree:
                     break
                 current = current.right
             else:
-                return  # Ya existe
+                return  # Already present
 
         # Backtrack
         while path:
@@ -192,7 +192,7 @@ class AVLTree:
             else:
                 self.root = node
 
-    # --- Balanceo ---
+    # --- Balancing ---
 
     def _balance(self, node: AVLNode) -> AVLNode:
         balance = self.get_balance(node)
@@ -235,7 +235,7 @@ class AVLTree:
         y.update_height()
         return y
 
-    # --- Eliminación (Iterativa) ---
+    # --- Deletion (iterative) ---
 
     def delete(self, key: TreeKey) -> None:
         if not self.root:
@@ -302,10 +302,10 @@ class AVLTree:
             else:
                 self.root = node
 
-    # --- Búsqueda ---
+    # --- Search ---
 
     def search(self, key: TreeKey) -> tuple[Optional[AVLNode], int]:
-        """Retorna (nodo, nodos_visitados). Costo = profundidad + 1."""
+        """Returns (node, nodes_visited). Cost = depth + 1."""
         current = self.root
         visited = 0
         while current is not None:
@@ -323,7 +323,7 @@ class AVLTree:
         node, visited = self.search(key)
         return None if node is None else visited - 1
 
-    # --- Recuperación de balance (Sección 8, Iterativa) ---
+    # --- Balance recovery (Section 8, iterative) ---
 
     def recover_balance(self) -> dict:
         before = {
@@ -381,7 +381,7 @@ class AVLTree:
                     else:
                         self.root = node
 
-    # --- Recorridos (Iterativos) ---
+    # --- Traversals (iterative) ---
 
     def inorder(self) -> list[TreeKey]:
         result = []
@@ -523,7 +523,7 @@ class AVLTree:
         return count
 
     def to_dict(self) -> Optional[dict]:
-        """Serializa el árbol completo a JSON (para dibujar en el front)."""
+        """Serializes the whole tree to JSON (to draw it in the front end)."""
         if not self.root:
             return None
         dicts = {}
@@ -558,7 +558,7 @@ class AVLTree:
 # =====================================================================
 
 class BSTNode:
-    """Nodo de BST simple (solo clave, sin balanceo)."""
+    """Plain BST node (key only, no balancing)."""
 
     def __init__(self, key: TreeKey):
         self.key = key
@@ -572,7 +572,7 @@ class BSTNode:
 # =====================================================================
 
 class BSTTree:
-    """BST sin balanceo (para comparación con AVL)."""
+    """BST without balancing (to compare with the AVL)."""
 
     def __init__(self):
         self.root: Optional[BSTNode] = None
@@ -688,7 +688,7 @@ class BSTTree:
                 succ_parent.left = succ.right
 
     def search(self, key: TreeKey) -> tuple[Optional[BSTNode], int]:
-        """Busca en el BST. Retorna (nodo, comparaciones)."""
+        """Searches the BST. Returns (node, comparisons)."""
         current = self.root
         visited = 0
         while current is not None:
@@ -788,7 +788,7 @@ class BSTTree:
 
 
 # =====================================================================
-# Comparativa AVL vs BST (Sección 11 y 15)
+# AVL vs BST comparison (Sections 11 and 15)
 # =====================================================================
 
 class _DummyEvent:
@@ -804,8 +804,8 @@ class _DummyEvent:
 
 def compare_trees(keys: list[TreeKey]) -> dict:
     """
-    Inserta exactamente la misma secuencia de claves en un AVL y en un BST.
-    Compara: raíces, alturas, cantidad de hojas y número de comparaciones de búsqueda.
+    Inserts exactly the same key sequence into an AVL and into a BST.
+    Compares roots, heights, leaf counts and search comparisons.
     """
     avl = AVLTree()
     bst = BSTTree()
@@ -814,7 +814,7 @@ def compare_trees(keys: list[TreeKey]) -> dict:
         avl.insert(_DummyEvent(k))
         bst.insert(k)
 
-    # Comparar búsquedas de cada clave
+    # Compare the search of every key
     avl_comps = [avl.search(k)[1] for k in keys]
     bst_comps = [bst.search(k)[1] for k in keys]
 

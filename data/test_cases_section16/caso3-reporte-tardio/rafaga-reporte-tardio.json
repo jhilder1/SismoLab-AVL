@@ -1,0 +1,18 @@
+{
+  "format": "sismolab-burst",
+  "description": "Caso 3: llega tarde el evento 303, M 6.1, ocurrido a las 09:55 cerca de 301 y 302. Pasa a ser candidato de ambos y la politica lo elige como su referencia.",
+  "reports": [
+    {
+      "event_id": 303,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 6.1,
+      "depth_km": 20.0,
+      "epicenter": {
+        "x": 605,
+        "y": 595
+      },
+      "occurrence_time": "2026-09-10T09:55:00Z"
+    }
+  ]
+}

@@ -1,0 +1,270 @@
+{
+  "format": "sismolab-burst",
+  "description": "Para topologies/normal.json. 8 eventos nuevos (310-317) reportados por 4 estaciones, cada uno confirmado despues por otras 2: el orden de la cola es el de recepcion, no el de prioridad.",
+  "reports": [
+    {
+      "event_id": 310,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 6.3,
+      "depth_km": 12.0,
+      "epicenter": {
+        "x": 260,
+        "y": 560
+      },
+      "occurrence_time": "2026-09-11T10:00:00Z"
+    },
+    {
+      "event_id": 311,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 2.2,
+      "depth_km": 40.0,
+      "epicenter": {
+        "x": 120,
+        "y": 90
+      },
+      "occurrence_time": "2026-09-11T11:00:00Z"
+    },
+    {
+      "event_id": 310,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 6.3,
+      "depth_km": 12.0,
+      "epicenter": {
+        "x": 260,
+        "y": 560
+      },
+      "occurrence_time": "2026-09-11T10:00:00Z"
+    },
+    {
+      "event_id": 310,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 6.3,
+      "depth_km": 12.0,
+      "epicenter": {
+        "x": 260,
+        "y": 560
+      },
+      "occurrence_time": "2026-09-11T10:00:00Z"
+    },
+    {
+      "event_id": 312,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 4.9,
+      "depth_km": 45.0,
+      "epicenter": {
+        "x": 700,
+        "y": 650
+      },
+      "occurrence_time": "2026-09-11T12:00:00Z"
+    },
+    {
+      "event_id": 311,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 2.2,
+      "depth_km": 40.0,
+      "epicenter": {
+        "x": 120,
+        "y": 90
+      },
+      "occurrence_time": "2026-09-11T11:00:00Z"
+    },
+    {
+      "event_id": 311,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 2.2,
+      "depth_km": 40.0,
+      "epicenter": {
+        "x": 120,
+        "y": 90
+      },
+      "occurrence_time": "2026-09-11T11:00:00Z"
+    },
+    {
+      "event_id": 313,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 7.4,
+      "depth_km": 8.0,
+      "epicenter": {
+        "x": 420,
+        "y": 720
+      },
+      "occurrence_time": "2026-09-11T13:00:00Z"
+    },
+    {
+      "event_id": 312,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 4.9,
+      "depth_km": 45.0,
+      "epicenter": {
+        "x": 700,
+        "y": 650
+      },
+      "occurrence_time": "2026-09-11T12:00:00Z"
+    },
+    {
+      "event_id": 312,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 4.9,
+      "depth_km": 45.0,
+      "epicenter": {
+        "x": 700,
+        "y": 650
+      },
+      "occurrence_time": "2026-09-11T12:00:00Z"
+    },
+    {
+      "event_id": 314,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 3.1,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 900,
+        "y": 300
+      },
+      "occurrence_time": "2026-09-11T14:00:00Z"
+    },
+    {
+      "event_id": 313,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 7.4,
+      "depth_km": 8.0,
+      "epicenter": {
+        "x": 420,
+        "y": 720
+      },
+      "occurrence_time": "2026-09-11T13:00:00Z"
+    },
+    {
+      "event_id": 313,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 7.4,
+      "depth_km": 8.0,
+      "epicenter": {
+        "x": 420,
+        "y": 720
+      },
+      "occurrence_time": "2026-09-11T13:00:00Z"
+    },
+    {
+      "event_id": 315,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 5.1,
+      "depth_km": 22.0,
+      "epicenter": {
+        "x": 610,
+        "y": 420
+      },
+      "occurrence_time": "2026-09-11T15:00:00Z"
+    },
+    {
+      "event_id": 314,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 3.1,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 900,
+        "y": 300
+      },
+      "occurrence_time": "2026-09-11T14:00:00Z"
+    },
+    {
+      "event_id": 314,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 3.1,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 900,
+        "y": 300
+      },
+      "occurrence_time": "2026-09-11T14:00:00Z"
+    },
+    {
+      "event_id": 316,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 1.4,
+      "depth_km": 5.0,
+      "epicenter": {
+        "x": 60,
+        "y": 380
+      },
+      "occurrence_time": "2026-09-11T16:00:00Z"
+    },
+    {
+      "event_id": 315,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 5.1,
+      "depth_km": 22.0,
+      "epicenter": {
+        "x": 610,
+        "y": 420
+      },
+      "occurrence_time": "2026-09-11T15:00:00Z"
+    },
+    {
+      "event_id": 315,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 5.1,
+      "depth_km": 22.0,
+      "epicenter": {
+        "x": 610,
+        "y": 420
+      },
+      "occurrence_time": "2026-09-11T15:00:00Z"
+    },
+    {
+      "event_id": 317,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 6.8,
+      "depth_km": 30.0,
+      "epicenter": {
+        "x": 330,
+        "y": 610
+      },
+      "occurrence_time": "2026-09-11T17:00:00Z"
+    },
+    {
+      "event_id": 316,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 1.4,
+      "depth_km": 5.0,
+      "epicenter": {
+        "x": 60,
+        "y": 380
+      },
+      "occurrence_time": "2026-09-11T16:00:00Z"
+    },
+    {
+      "event_id": 316,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 1.4,
+      "depth_km": 5.0,
+      "epicenter": {
+        "x": 60,
+        "y": 380
+      },
+      "occurrence_time": "2026-09-11T16:00:00Z"
+    }
+  ]
+}

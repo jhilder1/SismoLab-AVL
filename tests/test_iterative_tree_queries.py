@@ -187,3 +187,14 @@ def test_find_eligible_branches_tie_break_by_root_id():
     assert branches[1]["root_id"] == 2
     assert set(branches[0]["event_ids"]) == {3, 6, 7}
     assert set(branches[1]["event_ids"]) == {2, 4, 5}
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Register the plain test_* functions so `python -m unittest discover` runs them
+    too (pytest finds them by itself)."""
+    import unittest
+    suite = unittest.TestSuite()
+    for name, func in sorted(globals().items()):
+        if name.startswith("test_") and callable(func):
+            suite.addTest(unittest.FunctionTestCase(func, description=name))
+    return suite

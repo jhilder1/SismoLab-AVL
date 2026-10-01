@@ -1,10 +1,9 @@
 """
-SismoLab AVL — Punto de entrada.
+SismoLab AVL — entry point.
 
-Ejecutar con: python main.py
-Se abre una ventana con la interfaz gráfica.
-Todas las funciones expuestas con @eel.expose se llaman
-directamente desde JavaScript: eel.nombre_funcion(args)
+Run with: python main.py
+A window opens with the graphical interface. Every function exposed with
+@eel.expose is called directly from JavaScript: eel.function_name(args)
 """
 
 import os
@@ -15,17 +14,17 @@ from domain.models import Epicenter, Report, Zone, Station, parse_time
 from domain.storage import StateError
 from domain.versions import VersionStore
 
-# Carpeta donde abre el explorador de archivos (solo el punto de partida:
-# el usuario elige el archivo, no hay rutas de entrada fijas - Sección 12).
+# Folder where the file explorer opens (only the starting point: the user
+# picks the file, there are no fixed input paths - Section 12).
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-# Versiones con nombre: persisten en disco al cerrar el programa (Sección 13).
+# Named versions: kept on disk after the program closes (Section 13).
 versions = VersionStore(os.path.join(DATA_DIR, "versions"))
 
-# Estado global del simulador
+# Global simulator state
 sc = Scenario()
 
-# Zonas y estaciones de ejemplo
+# Sample zones and stations
 sc.zones = [
     Zone("Norte", 0, 500, 500, 1000, True),
     Zone("Centro", 200, 800, 200, 800, True),
@@ -39,24 +38,24 @@ sc.stations = {
     "EST-004": Station("EST-004", "Estacion Costa"),
 }
 
-# Inicializar Eel apuntando a la carpeta web/
+# Start Eel on the web/ folder
 eel.init("web")
 
 
 # =================================================================
-# Funciones expuestas al frontend
+# Functions exposed to the front end
 # =================================================================
 
 @eel.expose
 def get_state():
-    """Retorna el estado completo del simulador."""
+    """Returns the whole simulator state."""
     return sc.summary()
 
 
 @eel.expose
 def create_event(event_id, magnitude, depth_km, epicenter_x, epicenter_y,
                  occurrence_time_str, station_id):
-    """Crea un evento sísmico nuevo."""
+    """Creates a new seismic event."""
     try:
         occ = datetime.fromisoformat(occurrence_time_str)
         event = sc.create_event(
@@ -75,7 +74,7 @@ def create_event(event_id, magnitude, depth_km, epicenter_x, epicenter_y,
 
 @eel.expose
 def correct_event(event_id, magnitude=None, depth_km=None):
-    """Corrige magnitud y/o profundidad de un evento."""
+    """Corrects the magnitude and/or depth of an event."""
     try:
         mag = float(magnitude) if magnitude not in (None, "", "null") else None
         dep = float(depth_km) if depth_km not in (None, "", "null") else None
@@ -87,7 +86,7 @@ def correct_event(event_id, magnitude=None, depth_km=None):
 
 @eel.expose
 def preview_delete(event_id):
-    """Muestra el evento afectado antes de eliminarlo (Sección 6)."""
+    """Shows the affected event before deleting it (Section 6)."""
     try:
         return {"ok": True, **sc.preview_delete(int(event_id))}
     except (TypeError, ValueError) as e:
@@ -96,7 +95,7 @@ def preview_delete(event_id):
 
 @eel.expose
 def delete_event(event_id):
-    """Elimina un evento del catálogo activo."""
+    """Deletes an event from the active catalogue."""
     try:
         event = sc.delete_event(int(event_id))
         return {"ok": True, "message": f"Evento {event.format_id()} eliminado"}
@@ -106,7 +105,7 @@ def delete_event(event_id):
 
 @eel.expose
 def search_event(event_id):
-    """Busca un evento por ID: indica si está activo, archivado o eliminado."""
+    """Looks up an event by id: says whether it is active, archived or deleted."""
     try:
         info = sc.lookup_event(int(event_id))
         if info["status"] == "unknown":
@@ -119,7 +118,7 @@ def search_event(event_id):
 @eel.expose
 def enqueue_report(event_id, revision, station_id, magnitude, depth_km,
                    epicenter_x, epicenter_y, occurrence_time_str):
-    """Encola un reporte de estación."""
+    """Enqueues a station report."""
     try:
         report = Report(
             event_id=int(event_id),
@@ -138,43 +137,43 @@ def enqueue_report(event_id, revision, station_id, magnitude, depth_km,
 
 @eel.expose
 def process_report():
-    """Procesa el siguiente reporte de la cola."""
+    """Processes the next report in the queue."""
     result = sc.process_next_report()
     return result
 
 
 @eel.expose
 def undo_action():
-    """Deshace la última acción."""
+    """Undoes the last action."""
     return sc.undo()
 
 @eel.expose
 def redo_action():
-    """Rehace la acción recién deshecha."""
+    """Redoes the action just undone."""
     return sc.redo()
 
 
 @eel.expose
 def toggle_stress():
-    """Activa/desactiva modo estrés."""
+    """Turns stress mode on or off."""
     return sc.toggle_stress()
 
 
 @eel.expose
 def recover_balance():
-    """Recupera el balance del árbol (sale del modo estrés)."""
+    """Restores the balance of the tree (global recovery)."""
     return sc.recover_balance()
 
 
 @eel.expose
 def run_audit():
-    """Ejecuta auditoría completa del sistema."""
+    """Runs the full structure audit."""
     return sc.run_audit()
 
 
 @eel.expose
 def mark_reviewed(event_id):
-    """Marca un evento como revisado."""
+    """Marks an event as reviewed."""
     try:
         event = sc.mark_reviewed(int(event_id))
         return {"ok": True, "message": f"Evento {event.format_id()} marcado como revisado"}
@@ -184,7 +183,7 @@ def mark_reviewed(event_id):
 
 @eel.expose
 def advance_clock(hours):
-    """Avanza el reloj de simulación (acción que se puede deshacer)."""
+    """Moves the simulation clock forward (an undoable action)."""
     try:
         clock = sc.advance_clock(float(hours))
         return {"ok": True, "clock": clock.isoformat()}
@@ -194,21 +193,21 @@ def advance_clock(hours):
 
 @eel.expose
 def get_stations():
-    """Retorna la lista de estaciones disponibles."""
+    """Returns the available stations."""
     return [s.to_dict() for s in sc.stations.values()]
 
 
 @eel.expose
 def preview_archive():
-    """Vista previa del archivo (Sección 10): la rama que elige la regla,
-    sus IDs, su cantidad y la justificación, antes de ejecutar."""
+    """Archive preview (Section 10): the branch the rule selects, its ids,
+    its size and the justification, before running it."""
     return {"ok": True, **sc.preview_archive()}
 
 
 @eel.expose
 def archive_selected_branch(event_ids):
-    """Archiva la rama de la vista previa. Si ya no es la que elige la regla
-    (el escenario cambió), se rechaza y no se archiva nada."""
+    """Archives the previewed branch. If the rule no longer selects it (the
+    scenario changed), it is refused and nothing is archived."""
     try:
         count = sc.archive_branch([int(i) for i in event_ids])
         return {"ok": True, "count": count, "event_ids": event_ids}
@@ -218,7 +217,7 @@ def archive_selected_branch(event_ids):
 
 @eel.expose
 def query_top_k_pending(k=5):
-    """Retorna los primeros k eventos pendientes en orden descendente de K."""
+    """Returns the first k pending events in descending order of K."""
     try:
         return {"ok": True, "data": sc.query_top_k_pending(int(k))}
     except Exception as e:
@@ -227,7 +226,7 @@ def query_top_k_pending(k=5):
 
 @eel.expose
 def query_by_magnitude(min_mag, max_mag):
-    """Eventos con magnitud en un intervalo inclusivo, con poda por K (Sección 11)."""
+    """Events with magnitude in an inclusive interval, pruned by K (Section 11)."""
     try:
         return {"ok": True, "data": sc.query_by_magnitude(float(min_mag), float(max_mag))}
     except (TypeError, ValueError) as e:
@@ -236,7 +235,7 @@ def query_by_magnitude(min_mag, max_mag):
 
 @eel.expose
 def query_by_depth_and_dates(max_depth, start_date_str, end_date_str):
-    """Eventos con profundidad <= límite dentro de un intervalo inclusivo de fechas."""
+    """Events with depth <= a limit inside an inclusive date interval."""
     if max_depth in (None, "") or not start_date_str or not end_date_str:
         return {"ok": False, "message": "La profundidad máxima y las fechas desde y hasta son obligatorias"}
     try:
@@ -249,13 +248,13 @@ def query_by_depth_and_dates(max_depth, start_date_str, end_date_str):
 
 @eel.expose
 def get_action_log(limit=100):
-    """Registro de acciones con los indicadores que cambió cada una (Sección 14)."""
+    """Action log with the indicators each action changed (Section 14)."""
     return sc.get_action_log(int(limit))
 
 
 @eel.expose
 def query_event_associations(event_id):
-    """Consulta candidatos, referencia y réplicas de un evento."""
+    """Candidates, reference and replicas of an event."""
     try:
         res = sc.query_event_associations(int(event_id))
         return {"ok": True, "data": res}
@@ -265,7 +264,7 @@ def query_event_associations(event_id):
 
 @eel.expose
 def query_costly_high_priority():
-    """Consulta eventos de prioridad alta con acceso costoso (profundidad > L)."""
+    """High-priority events with costly access (depth > L)."""
     try:
         res = sc.query_costly_high_priority()
         return {"ok": True, "data": res}
@@ -275,7 +274,7 @@ def query_costly_high_priority():
 
 @eel.expose
 def compare_trees_view():
-    """Retorna comparativa estructural entre AVL y BST."""
+    """Structural comparison between the AVL and the BST."""
     try:
         res = sc.compare_current_trees()
         return {"ok": True, "data": res}
@@ -285,7 +284,7 @@ def compare_trees_view():
 
 @eel.expose
 def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=None):
-    """Actualiza parámetros del escenario (W, R, L, T). Registra acción en undo."""
+    """Updates the scenario parameters (W, R, L, T) as one undoable action."""
     try:
         sc.update_parameters(
             w_hours=float(w_hours) if w_hours is not None else None,
@@ -299,17 +298,17 @@ def update_parameters(w_hours=None, r_km=None, l_depth=None, t_archive_hours=Non
 
 
 # =================================================================
-# Persistencia (Sección 12): explorador de archivos + carga/guardado
+# Persistence (Section 12): file explorer + load/save
 # =================================================================
 
 def _ask_path(title, save=False):
-    """Abre el explorador de archivos nativo y devuelve la ruta elegida (o None)."""
+    """Opens the native file explorer and returns the chosen path (or None)."""
     import tkinter as tk
     from tkinter import filedialog
 
     root = tk.Tk()
     root.withdraw()
-    root.attributes("-topmost", True)  # que el diálogo quede encima de la ventana
+    root.attributes("-topmost", True)  # keep the dialog above the app window
     try:
         options = {"parent": root, "title": title, "initialdir": DATA_DIR,
                    "filetypes": [("JSON", "*.json"), ("Todos", "*.*")]}
@@ -338,7 +337,7 @@ def _load(title, load_method):
 
 @eel.expose
 def save_scenario():
-    """Guarda el escenario completo (topología incluida) en un JSON."""
+    """Saves the whole scenario (topology included) to a JSON file."""
     path = _ask_path("Guardar escenario", save=True)
     if not path:
         return {"ok": False, "cancelled": True, "message": "Guardado cancelado"}
@@ -352,29 +351,35 @@ def save_scenario():
 
 @eel.expose
 def load_scenario():
-    """Carga por topología: reconstruye el árbol exacto del archivo."""
+    """Topology load: rebuilds the exact tree of the file."""
     return _load("Cargar escenario (topología)", sc.load_scenario_file)
 
 
 @eel.expose
 def load_insertions():
-    """Carga por inserciones: misma secuencia en un AVL balanceado y un BST."""
+    """Insertion load: the same sequence into a balanced AVL and a BST."""
     return _load("Cargar eventos por inserciones", sc.load_insertions_file)
 
 
+@eel.expose
+def load_burst():
+    """Report burst (Section 8): enqueues the reports in order, without applying them."""
+    return _load("Cargar ráfaga de reportes", sc.load_burst_file)
+
+
 # =================================================================
-# Versiones con nombre (Sección 13)
+# Named versions (Section 13)
 # =================================================================
 
 @eel.expose
 def list_versions():
-    """Lista las versiones guardadas, de la más antigua a la más reciente."""
+    """Lists the saved versions, oldest first."""
     return versions.list()
 
 
 @eel.expose
 def save_version(name):
-    """Guarda el estado actual con un nombre."""
+    """Saves the current state under a name."""
     try:
         info = sc.save_version(versions, name)
         return {"ok": True, "message": f"Versión '{info['name']}' guardada"}
@@ -384,7 +389,7 @@ def save_version(name):
 
 @eel.expose
 def restore_version(version_id):
-    """Restaura una versión (acción que se puede deshacer)."""
+    """Restores a version (an undoable action)."""
     try:
         info = sc.restore_version(versions, version_id)
         return {"ok": True, "message": f"Versión '{info['name']}' restaurada "
@@ -396,7 +401,7 @@ def restore_version(version_id):
 
 
 # =================================================================
-# Arrancar la aplicación
+# Start the application
 # =================================================================
 
 if __name__ == "__main__":
@@ -404,8 +409,8 @@ if __name__ == "__main__":
     print("Cerrando la ventana se detiene el servidor.")
 
     PORT = 8080
-    # Intentar con Chrome, Edge o el navegador por defecto; si ninguno funciona,
-    # arrancar solo el servidor y mostrar la URL manualmente.
+    # Try Chrome, Edge or the default browser; if none works, start only the
+    # server and print the URL to open by hand.
     for mode in ("chrome", "edge", "default"):
         try:
             eel.start("index.html", size=(1400, 850), port=PORT, mode=mode)

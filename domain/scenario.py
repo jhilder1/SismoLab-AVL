@@ -1,8 +1,8 @@
 """
-Scenario — Estado central del simulador.
+Scenario — central state of the simulator.
 
-Contiene el AVL, BST, índice de eventos, archivados, cola, pila, zonas,
-estaciones, parámetros y métricas. Toda operación pasa por aquí.
+Holds the AVL, the BST, the event index, the history, the queue, the undo
+stack, zones, stations, parameters and metrics. Every operation goes through here.
 """
 
 import os
@@ -16,7 +16,7 @@ from domain.models import (
 )
 from domain.storage import scenario_to_dict, apply_state, read_json_file, write_json_file
 from domain.indicators import indicators_of, indicators_from_state, indicator_changes
-from domain.loader import load_topology, load_insertions, compare_loaded_trees
+from domain.loader import load_topology, load_insertions, load_burst, compare_loaded_trees
 from domain.validation import check_tree
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
@@ -26,7 +26,7 @@ ACTION_LOG_SIZE = 200
 
 
 class Scenario:
-    """Contenedor central del estado del simulador."""
+    """Central container of the simulator state."""
 
     def __init__(self):
         self.avl = AVLTree()
@@ -41,16 +41,16 @@ class Scenario:
         self.zones: list[Zone] = []
         self.stations: dict[str, Station] = {}
 
-        # Parámetros ajustables
+        # Adjustable parameters
         self.W_hours: float = 48.0
         self.R_km: float = 40.0
         self.L_depth: int = 3
         self.T_archive_hours: float = 72.0
 
-        # Reloj de simulación
+        # Simulation clock
         self.clock: datetime = datetime(2026, 1, 1, 0, 0, 0)
 
-        # Métricas e indicadores (Sección 14)
+        # Metrics and indicators (Section 14)
         self.total_events_created = 0
         self.total_reports_processed = 0
         self.total_corrections = 0
@@ -166,7 +166,7 @@ class Scenario:
         return list(reversed(self.action_log))[:max(0, limit)]
 
     def summary(self) -> dict:
-        """Indicadores visibles (Sección 14) + parámetros vigentes."""
+        """Visible indicators (Section 14) and the current parameters."""
         values = indicators_of(self)
         return {
             "counts": {
@@ -238,10 +238,10 @@ class Scenario:
         }
 
     # ================================================================
-    # Operaciones de negocio (antes repartidas en 6 servicios)
+    # Business operations (formerly spread over 6 services)
     # ================================================================
 
-    # --- Crear evento ---
+    # --- Create event ---
 
     def create_event(self, event_id: int, magnitude: float, depth_km: float,
                      epicenter_x: float, epicenter_y: float,
@@ -278,7 +278,7 @@ class Scenario:
         self.recalculate_all_associations()
         return event
 
-    # --- Corregir evento ---
+    # --- Correct event ---
 
     def correct_event(self, event_id: int, magnitude: Optional[float] = None,
                       depth_km: Optional[float] = None,
@@ -333,7 +333,7 @@ class Scenario:
         self.recalculate_all_associations()
         return event
 
-    # --- Eliminar evento ---
+    # --- Delete event ---
 
     def preview_delete(self, event_id: int) -> dict:
         """What deleting an event will do, shown before running it (Section 6).
@@ -381,7 +381,7 @@ class Scenario:
             f"Eliminar evento {event.format_id()}")
         return event
 
-    # --- Marcar revisado ---
+    # --- Mark as reviewed ---
 
     def mark_reviewed(self, event_id: int) -> SeismicEvent:
         event = self.get_event(event_id)
@@ -393,7 +393,7 @@ class Scenario:
             f"Marcar revisado {event.format_id()}")
         return event
 
-    # --- Encolar y procesar reportes ---
+    # --- Enqueue and process reports ---
 
     def enqueue_report(self, report: Report):
         errors = SeismicEvent.validate_data(
@@ -422,13 +422,13 @@ class Scenario:
         report = self.report_queue.dequeue()
         event = self.get_event(report.event_id)
 
-        # Caso A: ID eliminado → rechazo total (Sección 6)
+        # Case A: deleted id -> always rejected (Section 6)
         if report.event_id in self.deleted_ids:
             self.total_reports_discarded += 1
             result = {"result": "REJECTED", "event_id": report.event_id,
                       "reason": "Evento eliminado, no se aceptan reportes posteriores"}
 
-        # Caso B: ID archivado (Sección 6: reactivación con rev > vigente)
+        # Case B: archived id (Section 6: a higher revision reactivates it)
         elif report.event_id in self.archived:
             archived_event = self.archived[report.event_id]
             if report.revision > archived_event.revision:
@@ -468,7 +468,7 @@ class Scenario:
                 result = {"result": "OUTDATED", "event_id": report.event_id,
                           "report_rev": report.revision, "current_rev": archived_event.revision}
 
-        # Caso C: ID activo
+        # Case C: active id
         elif event:
             if report.revision > event.revision:
                 old_key = event.build_key()
@@ -506,7 +506,7 @@ class Scenario:
                 result = {"result": "OUTDATED", "event_id": report.event_id,
                           "report_rev": report.revision, "current_rev": event.revision}
 
-        # Caso D: ID nuevo desconocido
+        # Case D: unknown id, a new event
         else:
             try:
                 new_event = SeismicEvent(
@@ -535,7 +535,7 @@ class Scenario:
             f"rev={report.revision} → {result['result']}{reason}")
         return result
 
-    # --- Asociaciones ---
+    # --- Associations ---
 
     def _calculate_association(self, event_id: int) -> Optional[Association]:
         event = self.event_index.get(event_id) or self.archived.get(event_id)
@@ -549,7 +549,7 @@ class Scenario:
             event.reference_event_id = None
             return assoc
 
-        # Mayor M → menor distancia → menor ID
+        # Largest M, then smallest distance, then smallest id
         def sort_key(c):
             dist = event.epicenter.distance_to(c.epicenter)
             return (-c.magnitude, dist, c.event_id)
@@ -591,7 +591,7 @@ class Scenario:
         for event_id in list(self.archived.keys()):
             self._calculate_association(event_id)
 
-    # --- Archivo ---
+    # --- Archive ---
 
     def find_eligible_branches(self) -> list[dict]:
         # Iterative pre-order search (explicit stack of (node, depth)): only
@@ -617,7 +617,7 @@ class Scenario:
             else:
                 stack.append((node.right, depth + 1))
                 stack.append((node.left, depth + 1))
-        # Desempates: 1. Mayor cantidad, 2. Mayor profundidad de raíz, 3. Mayor ID
+        # Tie-break: 1. more nodes, 2. deeper root, 3. larger root id
         result.sort(key=lambda x: (x["count"], x["root_depth"], x["root_id"]), reverse=True)
         return result
 
@@ -858,7 +858,7 @@ class Scenario:
     def can_undo(self) -> bool:
         return not self.undo_stack.is_empty()
 
-    # --- Auditoría ---
+    # --- Audit ---
 
     def run_audit(self) -> dict:
         """Global consistency check (Section 14).
@@ -1010,7 +1010,7 @@ class Scenario:
 
         return errors
 
-    # --- Modo estrés ---
+    # --- Stress mode ---
 
     def _run_recovery(self) -> dict:
         """Rebalance the AVL, with the report queue paused meanwhile (Section 8).
@@ -1093,7 +1093,7 @@ class Scenario:
         return {"result": "RECOVERED", "message": message,
                 "cost": cost, "stress_mode": self.avl.stress_mode}
 
-    # --- Reloj y parámetros (Sections 3, 7, 9, 10) ---
+    # --- Clock and parameters (Sections 3, 7, 9, 10) ---
 
     def advance_clock(self, hours: float) -> datetime:
         """Move the simulation clock forward; it never goes back (Section 3)."""
@@ -1160,6 +1160,30 @@ class Scenario:
                             f"desde {os.path.basename(path)}")
         return comparison
 
+    def load_burst_file(self, path: str) -> dict:
+        """Report burst (Section 8): every report enters the queue, in file
+        order, as one undoable action (a load, Section 13). None is applied
+        until its queue step runs. Raises StateError and keeps the queue when
+        any report is invalid."""
+        data = read_json_file(path)
+        reports = load_burst(self, data)
+        first_position = self.report_queue.size() + 1
+        stations = sorted({r.station_id for r in reports})
+        before = self.snapshot()
+        for report in reports:
+            self.report_queue.enqueue(report)
+        self._record("LOAD_BURST", before,
+                     f"Cargar ráfaga {os.path.basename(path)}: {len(reports)} reportes "
+                     f"de {len(stations)} estación(es)")
+        description = data.get("description")
+        return {
+            "count": len(reports),
+            "stations": stations,
+            "first_position": first_position,
+            "queue_size": self.report_queue.size(),
+            "description": description if isinstance(description, str) else None,
+        }
+
     # --- Named versions (Section 13) ---
 
     def save_version(self, store, name: str) -> dict:
@@ -1185,15 +1209,14 @@ class Scenario:
         self._record(action_type, before, description)
 
     # ================================================================
-    # Consultas y análisis del desempeño (Sección 11)
+    # Queries and performance analysis (Section 11)
     # ================================================================
 
     def query_top_k_pending(self, k: int) -> dict:
         """
-        Los primeros k eventos pendientes de atención en orden descendente de K.
-        Recorre el árbol en orden inverso (derecha a izquierda) y poda la búsqueda
-        al alcanzar k elementos.
-        Reporta la cantidad de nodos examinados.
+        The first k events pending attention, in descending order of K.
+        Walks the tree in reverse order (right to left) and stops as soon as
+        it has k results. Reports how many nodes it examined.
 
         Iterative reverse in-order walk (explicit stack: push the right spine,
         pop, then descend left), so a degenerate tree of any size cannot
@@ -1350,8 +1373,8 @@ class Scenario:
 
     def query_event_associations(self, event_id: int) -> dict:
         """
-        Candidatos y referencia elegida para un evento, así como los eventos que
-        lo utilizan como referencia. Identifica si cada resultado está activo o archivado.
+        Candidates and chosen reference of an event, and the events that use
+        it as their reference. Says whether each result is active or archived.
         """
         event = self.event_index.get(event_id) or self.archived.get(event_id)
         if not event:
@@ -1359,7 +1382,7 @@ class Scenario:
 
         status_str = "ACTIVO" if event_id in self.event_index else "ARCHIVADO"
 
-        # Candidatos
+        # Candidates
         raw_candidates = self._find_candidates(event)
         candidates_info = []
         for c in raw_candidates:
@@ -1375,7 +1398,7 @@ class Scenario:
                 "status": c_status,
             })
 
-        # Referencia elegida
+        # Chosen reference
         ref_info = None
         if event.reference_event_id:
             ref_event = self.event_index.get(event.reference_event_id) or self.archived.get(event.reference_event_id)
@@ -1387,7 +1410,7 @@ class Scenario:
                     "status": r_status,
                 }
 
-        # Eventos que usan este evento como referencia (réplicas)
+        # Events that use this one as their reference (replicas)
         replicas = []
         all_events = list(self.event_index.values()) + list(self.archived.values())
         for other in all_events:

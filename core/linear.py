@@ -1,12 +1,12 @@
 """
-Estructuras lineales: Pila (Undo) y Cola FIFO (Reportes).
+Linear structures: the undo stack and the FIFO report queue.
 """
 
 from collections import deque
 
 
 class UndoStack:
-    """Pila para deshacer acciones. Tamaño máximo configurable."""
+    """Stack of undoable actions with a configurable maximum size."""
 
     def __init__(self, max_size: int = 100):
         self._stack = []
@@ -38,7 +38,7 @@ class UndoStack:
 
 
 class ReportQueue:
-    """Cola FIFO para reportes de estaciones sísmicas."""
+    """FIFO queue of seismic station reports."""
 
     def __init__(self):
         self._queue = deque()

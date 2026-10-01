@@ -24,6 +24,7 @@ sys.path.insert(0, ROOT)
 from domain.indicators import INDICATOR_NAMES, indicators_from_state, indicators_of
 from domain.models import Epicenter, Priority, Report, SeismicEvent
 from domain.scenario import ACTION_LOG_SIZE, Scenario
+from domain.storage import StateError
 from tests.test_storage import T0, make_scenario
 
 
@@ -316,7 +317,8 @@ class ActionLogTest(unittest.TestCase):
 
 
 class IndicatorsUiTest(unittest.TestCase):
-    """web/app.js renders the Indicadores tab and the queries from real answers.
+    """web/app.js renders the Indicadores tab, the queries and the burst loader
+    from real answers.
 
     Runs tests/js/indicators_ui.js with the answers main.py would send for
     data/topologies/normal.json after a few actions. Skipped without Node.js.
@@ -348,6 +350,18 @@ class IndicatorsUiTest(unittest.TestCase):
             "costly": {"ok": True, "data": sc.query_costly_high_priority()},
             "assoc": {"ok": True, "data": sc.query_event_associations(min(sc.event_index))},
         }
+        bursts = os.path.join(ROOT, "data", "bursts")
+        data["burst_ok"] = {"ok": True, "file": "rafaga-mixta.json",
+                            "info": sc.load_burst_file(os.path.join(bursts, "rafaga-mixta.json"))}
+        with self.assertRaises(StateError) as ctx:
+            sc.load_burst_file(os.path.join(bursts, "rafaga-invalida.json"))
+        data["burst_bad"] = {"ok": False, "file": "rafaga-invalida.json",
+                             "message": "Archivo rechazado", "problems": ctx.exception.problems}
+        degraded = Scenario()
+        degraded.load_scenario_file(os.path.join(ROOT, "data", "test_cases_section16",
+                                                  "caso4-rotaciones-recuperacion",
+                                                  "estres-degradado.json"))
+        data["audit_stress"] = degraded.run_audit()
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "ui_data.json")
             with open(path, "w", encoding="utf-8") as handle:

@@ -1,0 +1,18 @@
+{
+  "format": "sismolab-burst",
+  "description": "Caso 2: llega la revision 1 del evento 200 con sus datos originales. Despues de la correccion (revision 2) debe descartarse sin crear otro nodo ni revertir la correccion.",
+  "reports": [
+    {
+      "event_id": 200,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 4.8,
+      "depth_km": 70.0,
+      "epicenter": {
+        "x": 300,
+        "y": 600
+      },
+      "occurrence_time": "2026-09-10T10:00:00Z"
+    }
+  ]
+}

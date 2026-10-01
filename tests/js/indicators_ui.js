@@ -1,6 +1,6 @@
 // Loads web/app.js with a fake DOM and a fake eel that replays real backend
 // answers (written by tests/test_queries_indicators.py) and checks what the
-// Indicadores tab and the Section 11 queries put on screen.
+// Indicadores tab, the Section 11 queries and the burst loader put on screen.
 // Usage: node tests/js/indicators_ui.js web/app.js <data.json>   (exit code 0 = passed)
 const fs = require("fs");
 const vm = require("vm");
@@ -18,6 +18,7 @@ function el(id) {
     return elements[id];
 }
 const ok = v => async () => v;
+let burstAnswer = null;
 const eel = {
     get_state: () => ok(data.state),
     get_action_log: () => ok(data.log),
@@ -25,8 +26,11 @@ const eel = {
     query_by_depth_and_dates: () => ok(data.depthdates),
     query_costly_high_priority: () => ok(data.costly),
     query_event_associations: () => ok(data.assoc),
+    load_burst: () => async () => burstAnswer,
+    run_audit: () => ok(data.audit_stress),
 };
-const context = { eel, console, setTimeout, clearTimeout, Promise, alert() {}, confirm: () => true,
+const alerts = [];
+const context = { eel, console, setTimeout, clearTimeout, Promise, alert: m => alerts.push(m), confirm: () => true,
     document: { getElementById: el, querySelectorAll: () => [], activeElement: null } };
 context.window = context;
 context.window.addEventListener = () => {};
@@ -83,6 +87,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     el("q-assoc-id").value = "1";
     await vm.runInContext("runQueryAssociations()", context);
     check("assoc cost", el("query-cost").textContent.startsWith("Nodos del AVL examinados: 0"));
+
+    burstAnswer = data.burst_ok;
+    await vm.runInContext("loadBurst()", context);
+    const info = data.burst_ok.info;
+    check("burst queued", el("burst-result").innerHTML.includes(
+        `${info.count} reporte(s) de ${info.stations.length} estacion(es) encolados`)
+        && el("burst-result").innerHTML.includes(`Posiciones ${info.first_position} a ${info.queue_size}`));
+    burstAnswer = data.burst_bad;
+    await vm.runInContext("loadBurst()", context);
+    check("burst rejected", el("burst-result").innerHTML.includes("rafaga rechazada")
+        && el("burst-result").innerHTML.includes("unknown station"));
+    check("burst action label", vm.runInContext("ACTION_LABELS.LOAD_BURST", context) === "Carga de rafaga");
+
+    await vm.runInContext("runAudit()", context);
+    const worst = Math.max(...data.audit_stress.unbalanced_nodes.map(n => Math.abs(n.balance_factor)));
+    check("stress audit reports the expected imbalance apart", alerts[alerts.length - 1].includes(
+        `Desbalance esperado del modo estrés: ${data.audit_stress.unbalanced_nodes.length} nodo(s)`)
+        && alerts[alerts.length - 1].includes(`|FB| = ${worst}`)
+        && !alerts[alerts.length - 1].includes("cumple la propiedad AVL"));
 
     for (const [name, passed] of checks) console.log(passed ? "ok  " : "FAIL", name);
     process.exit(checks.every(c => c[1]) ? 0 : 1);

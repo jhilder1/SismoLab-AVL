@@ -1,15 +1,15 @@
 /* ============================================
-   SismoLab AVL — Estilos
+   SismoLab AVL — Styles
    ============================================ */
 
 :root {
-    --bg: #18181b;        /* Zinc 900 (Gris muy neutro, sin tonos azules) */
+    --bg: #18181b;        /* Zinc 900 (neutral grey, no blue tint) */
     --bg2: #27272a;       /* Zinc 800 */
     --bg3: #3f3f46;       /* Zinc 700 */
     --border: #52525b;    /* Zinc 600 */
     --text: #f4f4f5;      /* Zinc 100 */
     --text2: #a1a1aa;     /* Zinc 400 */
-    --accent: #8b5cf6;    /* Violet 500 (Acento casual y moderno) */
+    --accent: #8b5cf6;    /* Violet 500 (accent colour) */
     --accent-hover: #7c3aed; /* Violet 600 */
     --accent2: #a78bfa;   /* Violet 400 */
     --green: #22c55e;
@@ -557,7 +557,7 @@ input[type="datetime-local"] { font-size: 0.75rem; }
     color: var(--accent); margin-top: 6px;
 }
 
-.queue-controls { display: flex; align-items: flex-end; gap: 12px; }
+.queue-controls { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .queue-controls .param { flex: 0 0 auto; min-width: 110px; }
 
 .queue-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }

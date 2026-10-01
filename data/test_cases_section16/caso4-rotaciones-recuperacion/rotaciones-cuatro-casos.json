@@ -1,0 +1,136 @@
+{
+  "format": "sismolab-insertions",
+  "description": "Caso 4: siete inserciones que provocan un caso RR, LL, RL y LR, en ese orden.",
+  "clock": "2026-09-12T00:00:00Z",
+  "zones": [
+    {
+      "name": "Norte",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 500,
+      "y_max": 1000,
+      "is_populated": true
+    },
+    {
+      "name": "Centro",
+      "x_min": 200,
+      "x_max": 800,
+      "y_min": 200,
+      "y_max": 800,
+      "is_populated": true
+    },
+    {
+      "name": "Sur",
+      "x_min": 0,
+      "x_max": 500,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": false
+    },
+    {
+      "name": "Costa",
+      "x_min": 500,
+      "x_max": 1000,
+      "y_min": 0,
+      "y_max": 500,
+      "is_populated": true
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "EST-001",
+      "name": "Estacion Norte"
+    },
+    {
+      "station_id": "EST-002",
+      "name": "Estacion Centro"
+    },
+    {
+      "station_id": "EST-003",
+      "name": "Estacion Sur"
+    },
+    {
+      "station_id": "EST-004",
+      "name": "Estacion Costa"
+    }
+  ],
+  "events": [
+    {
+      "event_id": 451,
+      "magnitude": 0.5,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 110,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 452,
+      "magnitude": 1.5,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 120,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 453,
+      "magnitude": 3.5,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 130,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 454,
+      "magnitude": 3.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 140,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 455,
+      "magnitude": 2.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 150,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 456,
+      "magnitude": 2.5,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 160,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    },
+    {
+      "event_id": 457,
+      "magnitude": 1.0,
+      "depth_km": 10.0,
+      "epicenter": {
+        "x": 170,
+        "y": 100
+      },
+      "occurrence_time": "2026-09-10T08:00:00Z",
+      "station_id": "EST-003"
+    }
+  ]
+}

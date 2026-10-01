@@ -55,7 +55,7 @@
         <!-- LEFT PANEL: Controls -->
         <aside id="panel-left" class="panel">
 
-            <!-- Crear Evento -->
+            <!-- Create event -->
             <section class="card">
                 <h3>Crear Evento</h3>
                 <div class="form-row">
@@ -74,7 +74,7 @@
                 <button onclick="window.createEvent()" class="btn btn-primary full-w">Crear Evento</button>
             </section>
 
-            <!-- Corregir Evento -->
+            <!-- Correct event -->
             <section class="card">
                 <h3>Corregir Evento</h3>
                 <div class="form-row">
@@ -87,7 +87,7 @@
                 <button onclick="correctEvent()" class="btn btn-warn full-w">Corregir</button>
             </section>
 
-            <!-- Eliminar y Buscar -->
+            <!-- Delete and search -->
             <section class="card">
                 <h3>Eliminar / Buscar</h3>
                 <div class="form-row">
@@ -101,7 +101,7 @@
                 <div id="search-result" class="result-box hidden"></div>
             </section>
 
-            <!-- Reportes -->
+            <!-- Reports -->
             <section class="card">
                 <h3>Encolar Reporte</h3>
                 <div class="form-row">
@@ -126,7 +126,7 @@
                 </div>
             </section>
 
-            <!-- Parámetros W, R, L, T -->
+            <!-- Parameters W, R, L, T -->
             <section class="card">
                 <h3>Parámetros</h3>
                 <div class="form-row">
@@ -140,7 +140,7 @@
                 <button onclick="window.applyParameters()" class="btn btn-primary full-w">Aplicar parámetros</button>
             </section>
 
-            <!-- Acciones -->
+            <!-- Actions -->
             <section class="card">
                 <h3>Acciones</h3>
                 <div class="form-row">
@@ -160,7 +160,7 @@
                 </div>
             </section>
 
-            <!-- Archivo (Sección 12) -->
+            <!-- File (Section 12) -->
             <section class="card">
                 <h3>Archivo</h3>
                 <button onclick="saveScenario()" class="btn btn-primary full-w">Guardar escenario</button>
@@ -169,7 +169,7 @@
                 <div id="file-result" class="result-box hidden"></div>
             </section>
 
-            <!-- Versiones con nombre (Sección 13) -->
+            <!-- Named versions (Section 13) -->
             <section class="card">
                 <h3>Versiones</h3>
                 <div class="form-row">
@@ -209,7 +209,7 @@
                     <span class="lg"><i class="sw sw-costly"></i>Acceso costoso</span>
                 </div>
 
-                <!-- Consultas y analisis del desempeno (Seccion 11) -->
+                <!-- Queries and performance analysis (Section 11) -->
                 <div id="queries-panel" class="queries-panel" style="display:none">
                     <div class="query-tabs">
                         <button class="btn btn-sm qtab active" data-q="topk" onclick="window.showQuery('topk')">Top k pendientes</button>
@@ -260,9 +260,11 @@
                     <div id="query-results" class="query-results"></div>
                 </div>
 
-                <!-- Cola FIFO de reportes y procesamiento continuo (Seccion 8) -->
+                <!-- FIFO report queue and continuous processing (Section 8) -->
                 <div id="queue-panel" class="queue-panel" style="display:none">
                     <div class="queue-controls">
+                        <button onclick="window.loadBurst()" class="btn btn-info">Cargar rafaga (JSON)</button>
+                        <button onclick="window.processReport()" class="btn">Procesar un paso</button>
                         <button id="btn-continuous" onclick="window.processContinuous()" class="btn btn-primary">Procesar continuo</button>
                         <label class="param">Pausa entre pasos
                             <select id="continuous-delay">
@@ -272,6 +274,7 @@
                             </select>
                         </label>
                     </div>
+                    <div id="burst-result" class="result-box hidden"></div>
 
                     <h4>Cola pendiente (orden de recepcion)</h4>
                     <div id="queue-pending"></div>
@@ -284,7 +287,7 @@
                     <div id="archived-list" class="archived-list" style="padding: 1rem;"></div>
                 </div>
 
-                <!-- Indicadores (Seccion 14) -->
+                <!-- Indicators (Section 14) -->
                 <div id="indicators-panel" class="indicators-panel" style="display:none">
                     <div class="ind-grid">
                         <div class="ind-group"><h4>Estructura</h4><table id="ind-structure" class="ind-table"></table></div>

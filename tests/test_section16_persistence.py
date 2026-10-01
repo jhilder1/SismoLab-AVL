@@ -178,12 +178,11 @@ class ReproducibleDataTest(unittest.TestCase):
         out = tempfile.mkdtemp()
         try:
             make_data.main(out_dir=out, verbose=False)
-            for folder in ("insertions", "topologies"):
+            for folder in ("insertions", "topologies", "bursts", "test_cases_section16"):
                 excluded = NON_REPRODUCIBLE_FILES.get(folder, set())
-                generated = sorted(os.listdir(os.path.join(out, folder)))
+                generated = json_files(os.path.join(out, folder))
                 self.assertEqual(generated, sorted(
-                    f for f in os.listdir(data_file(folder))
-                    if f.endswith(".json") and f not in excluded))
+                    f for f in json_files(data_file(folder)) if f not in excluded))
                 for name in generated:
                     with self.subTest(file=f"{folder}/{name}"):
                         # Compare parsed JSON: Git may change line endings on checkout.
@@ -191,6 +190,15 @@ class ReproducibleDataTest(unittest.TestCase):
                                          read_json_file(data_file(folder, name)))
         finally:
             shutil.rmtree(out)
+
+
+def json_files(folder):
+    """Relative paths of every .json file under folder, subfolders included."""
+    found = []
+    for current, _, names in os.walk(folder):
+        found += [os.path.relpath(os.path.join(current, n), folder)
+                  for n in names if n.endswith(".json")]
+    return sorted(found)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,102 @@
+{
+  "format": "sismolab-burst",
+  "description": "Caso 4: 8 altas con claves ascendentes (cada una mayor y anterior a las demas). En modo estres forman una cadena a la derecha con factores de balance hasta -7.",
+  "reports": [
+    {
+      "event_id": 420,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 6.0,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 300,
+        "y": 600
+      },
+      "occurrence_time": "2026-09-11T17:00:00Z"
+    },
+    {
+      "event_id": 421,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 6.2,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 301,
+        "y": 601
+      },
+      "occurrence_time": "2026-09-11T15:00:00Z"
+    },
+    {
+      "event_id": 422,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 6.4,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 302,
+        "y": 602
+      },
+      "occurrence_time": "2026-09-11T13:00:00Z"
+    },
+    {
+      "event_id": 423,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 6.6,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 303,
+        "y": 603
+      },
+      "occurrence_time": "2026-09-11T11:00:00Z"
+    },
+    {
+      "event_id": 424,
+      "revision": 1,
+      "station_id": "EST-001",
+      "magnitude": 6.8,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 304,
+        "y": 604
+      },
+      "occurrence_time": "2026-09-11T09:00:00Z"
+    },
+    {
+      "event_id": 425,
+      "revision": 1,
+      "station_id": "EST-002",
+      "magnitude": 7.0,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 305,
+        "y": 605
+      },
+      "occurrence_time": "2026-09-11T07:00:00Z"
+    },
+    {
+      "event_id": 426,
+      "revision": 1,
+      "station_id": "EST-003",
+      "magnitude": 7.2,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 306,
+        "y": 606
+      },
+      "occurrence_time": "2026-09-11T05:00:00Z"
+    },
+    {
+      "event_id": 427,
+      "revision": 1,
+      "station_id": "EST-004",
+      "magnitude": 7.4,
+      "depth_km": 15.0,
+      "epicenter": {
+        "x": 307,
+        "y": 607
+      },
+      "occurrence_time": "2026-09-11T03:00:00Z"
+    }
+  ]
+}

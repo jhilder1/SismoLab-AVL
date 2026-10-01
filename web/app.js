@@ -11,14 +11,14 @@ function log(msg, type) {
 
 function val(id) { return $(id).value; }
 
-// Escapa texto antes de meterlo en innerHTML (mensajes que vienen de archivos).
+// Escapes text before it goes into innerHTML (messages that come from files).
 function esc(text) {
     return String(text).replace(/[&<>"']/g, c => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     })[c]);
 }
 
-// Ultimo estado recibido y arbol que se esta mostrando ("avl" o "bst").
+// Last state received and the view being shown (a tree, the map or a panel).
 let lastState = null;
 let treeView = "avl";
 let zonesCache = null;
@@ -26,7 +26,7 @@ let limitL = 3;                 // access-depth budget L (section 9)
 let costlyIds = new Set();      // event ids currently marked as costly access
 
 // =====================================================
-// Refresh: trae el estado y actualiza toda la pantalla
+// Refresh: fetches the state and updates the whole screen
 // =====================================================
 
 async function refresh() {
@@ -114,7 +114,7 @@ function updateEvents(events) {
         list.innerHTML = '<p class="muted">Sin eventos.</p>';
         return;
     }
-    // Ordenar por prioridad descendente
+    // Descending priority first
     events.sort((a, b) => b.priority - a.priority || b.magnitude - a.magnitude);
     list.innerHTML = events.map(e => {
         const pClass = "p" + e.priority;
@@ -140,7 +140,7 @@ function renderArchived(archived) {
         list.innerHTML = '<p class="muted">Sin eventos archivados.</p>';
         return;
     }
-    // Orden descendente por id
+    // Descending id order
     archived.sort((a, b) => b.event_id - a.event_id);
     list.innerHTML = archived.map(e => {
         const pClass = "p" + e.priority;
@@ -327,7 +327,7 @@ function updateTree(treeData) {
 }
 
 // =====================================================
-// Actions: cada una llama a eel y hace refresh
+// Actions: each one calls eel and then refreshes
 // =====================================================
 // =====================================================
 // Geographic map (section 15): 0-1000 km plane
@@ -498,6 +498,29 @@ async function searchEvent() {
         log("El evento fue eliminado", "info");
     }
     box.innerHTML = html;
+}
+
+// Section 8: a burst file prepares the reports of N stations at once. They
+// enter the queue in file order and none is applied until its step runs.
+async function loadBurst() {
+    const res = await eel.load_burst()();
+    if (res.cancelled) { log(res.message, "info"); return; }
+    const box = $("burst-result");
+    box.classList.remove("hidden");
+    if (!res.ok) {
+        const items = (res.problems || []).map(p => `<li>${esc(p)}</li>`).join("");
+        box.innerHTML = `<b class="err">${esc(res.file || "")}: rafaga rechazada</b>
+            <div>Ningun reporte entro a la cola.</div><ul>${items}</ul>`;
+        log(res.message, "err");
+        return;
+    }
+    const i = res.info;
+    box.innerHTML = `<b class="ok">${esc(res.file)}: ${i.count} reporte(s) de ${i.stations.length} estacion(es) encolados</b>
+        <div>Posiciones ${i.first_position} a ${i.queue_size} de la cola (${esc(i.stations.join(", "))}).
+        Ninguno se aplica hasta procesarlo.</div>
+        ${i.description ? `<div class="muted">${esc(i.description)}</div>` : ""}`;
+    log(`Rafaga ${res.file}: ${i.count} reportes encolados. Se deshace como una sola accion.`, "ok");
+    refresh();
 }
 
 async function enqueueReport() {
@@ -784,8 +807,18 @@ async function recoverBalance() {
 async function runAudit() {
     const res = await eel.run_audit()();
     if (res.is_valid) {
-        const msg = `✅ Auditoría OK\n\n${res.nodes_checked} nodos verificados exitosamente.\n0 errores encontrados.\n\nTodo el árbol cumple las propiedades AVL.`;
-        log(`Auditoria OK: ${res.nodes_checked} nodos verificados, 0 errores`, "ok");
+        // Section 14: in stress mode the imbalance is expected, so it is
+        // reported apart from order and metadata errors (none were found).
+        const unbalanced = res.unbalanced_nodes || [];
+        const worst = unbalanced.reduce((m, n) => Math.max(m, Math.abs(n.balance_factor)), 0);
+        const balanceText = unbalanced.length
+            ? `Desbalance esperado del modo estrés: ${unbalanced.length} nodo(s) con factor fuera de {-1, 0, 1} `
+              + `(el mayor |FB| = ${worst}). Usa Recuperar Balance.`
+            : "Todos los factores de balance están en {-1, 0, 1}: el árbol cumple la propiedad AVL.";
+        const msg = `✅ Auditoría OK\n\n${res.nodes_checked} nodos verificados.\n`
+            + `0 errores de orden, alturas, identificadores ni referencias.\n\n${balanceText}`;
+        log(`Auditoria OK: ${res.nodes_checked} nodos verificados, 0 errores`
+            + (unbalanced.length ? ` | ${unbalanced.length} nodo(s) desbalanceado(s) por el modo estres` : ""), "ok");
         alert(msg);
     } else {
         const msg = `❌ Auditoría FALLÓ\n\nSe encontraron ${res.errors.length} error(es) en el árbol.\n\nDetalle del primer error:\n${res.errors[0]}`;
@@ -1132,7 +1165,7 @@ const ACTION_LABELS = {
     ARCHIVE: "Archivo masivo", TOGGLE_STRESS: "Cambio de modo", RECOVER: "Recuperacion global",
     ADVANCE_CLOCK: "Avance del reloj", PARAM_UPDATE: "Cambio de parametros",
     LOAD_TOPOLOGY: "Carga por topologia", LOAD_INSERTIONS: "Carga por inserciones",
-    RESTORE_VERSION: "Restaurar version", UNDO: "Deshacer", REDO: "Rehacer",
+    RESTORE_VERSION: "Restaurar version", LOAD_BURST: "Carga de rafaga", UNDO: "Deshacer", REDO: "Rehacer",
 };
 
 function renderIndicators(state) {
@@ -1239,7 +1272,7 @@ async function applyParameters() {
 }
 
 // =====================================================
-// Archivo: guardar y cargar (Seccion 12)
+// File: save and load (Section 12)
 // =====================================================
 
 function showFileResult(html) {
@@ -1301,7 +1334,7 @@ async function loadInsertions() {
 }
 
 // =====================================================
-// Versiones con nombre (Seccion 13)
+// Named versions (Section 13)
 // =====================================================
 
 async function refreshVersions() {
@@ -1311,7 +1344,7 @@ async function refreshVersions() {
         box.innerHTML = '<p class="muted">Sin versiones guardadas.</p>';
         return;
     }
-    // Mas reciente arriba.
+    // Most recent first.
     box.innerHTML = list.slice().reverse().map(v => {
         if (!v.valid) {
             return `<div class="version-item invalid" title="${esc(v.error)}">
@@ -1350,16 +1383,16 @@ async function restoreVersion(id) {
 }
 
 // =====================================================
-// Init: cargar estaciones y estado inicial
+// Init: load the stations and the initial state
 // =====================================================
 
 async function init() {
-    // Llenar selects de estaciones
+    // Fill the station selects
     const stations = await eel.get_stations()();
     for (const sel of [document.getElementById("ev-station"), document.getElementById("rp-station")]) {
         sel.innerHTML = stations.map(s => `<option value="${s.station_id}">${s.station_id}</option>`).join("");
     }
-    // Poner fecha default
+    // Default date
     const now = "2026-01-01T00:00";
     $("ev-time").value = now;
     $("rp-time").value = now;
@@ -1369,7 +1402,7 @@ async function init() {
     refreshVersions();
 }
 
-// Arrancar cuando la pagina cargue
+// Start when the page has loaded
 window.addEventListener("load", init);
 
 function addZoomPan(svg) {

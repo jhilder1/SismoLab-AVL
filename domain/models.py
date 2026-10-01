@@ -1,5 +1,5 @@
 """
-Modelos de dominio: enums, epicentro, zona, estación, reporte, asociación y evento sísmico.
+Domain models: enums, epicenter, zone, station, report, association and seismic event.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def normalize_tenths(value: float) -> float:
 
 
 # =====================================================================
-# Enumeraciones
+# Enumerations
 # =====================================================================
 
 class Priority(IntEnum):
@@ -79,7 +79,7 @@ class EventStatus(str, Enum):
 # =====================================================================
 
 class Epicenter:
-    """Coordenadas (x, y) del epicentro en el plano 2D (0–1000 km)."""
+    """Epicenter coordinates (x, y) on the 2D plane (0–1000 km)."""
 
     __slots__ = ("x", "y")
 
@@ -120,7 +120,7 @@ class Epicenter:
 # =====================================================================
 
 class Zone:
-    """Zona rectangular en el plano 2D. Puede ser poblada o no."""
+    """Rectangular zone on the 2D plane, populated or not."""
 
     __slots__ = ("name", "x_min", "x_max", "y_min", "y_max", "is_populated")
 
@@ -156,7 +156,7 @@ class Zone:
 # =====================================================================
 
 class Station:
-    """Estación de monitoreo sísmico."""
+    """Seismic monitoring station."""
 
     __slots__ = ("station_id", "name")
 
@@ -188,7 +188,7 @@ class Station:
 # =====================================================================
 
 class Report:
-    """Reporte de una estación sísmica (entra a la cola FIFO)."""
+    """Report from a seismic station (it enters the FIFO queue)."""
 
     __slots__ = ("event_id", "revision", "station_id", "magnitude",
                  "depth_km", "epicenter", "occurrence_time")
@@ -233,7 +233,7 @@ class Report:
 # =====================================================================
 
 class Association:
-    """Relación entre un evento y su posible sismo principal (mainshock)."""
+    """Link between an event and its possible main shock."""
 
     __slots__ = ("event_id", "reference_id", "candidate_ids", "selection_info")
 
@@ -266,7 +266,7 @@ class Association:
 # =====================================================================
 
 class SeismicEvent:
-    """Evento sísmico: la entidad central del dominio."""
+    """Seismic event: the central entity of the domain."""
 
     __slots__ = (
         "event_id", "magnitude", "depth_km", "epicenter", "occurrence_time",
@@ -290,7 +290,7 @@ class SeismicEvent:
         self.status: EventStatus = EventStatus.ACTIVE
         self.reference_event_id: Optional[int] = None
 
-    # --- Cálculo de prioridad (Sección 4) ---
+    # --- Priority calculation (Section 4) ---
 
     def _calculate_priority(self) -> Priority:
         if self.magnitude >= 6.0:
@@ -312,13 +312,13 @@ class SeismicEvent:
         self.priority = self._calculate_priority()
         return self.priority
 
-    # --- Clave AVL: K = (P, M, I) ---
+    # --- AVL key: K = (P, M, I) ---
 
     def build_key(self):
         from core.avl_tree import TreeKey
         return TreeKey(priority=int(self.priority), magnitude=self.magnitude, event_id=self.event_id)
 
-    # --- Correcciones ---
+    # --- Corrections ---
 
     def apply_correction(self, magnitude: Optional[float] = None,
                          depth_km: Optional[float] = None,
@@ -349,7 +349,7 @@ class SeismicEvent:
         return (f"SeismicEvent({self.format_id()}, M={self.magnitude}, "
                 f"P={self.priority.name}, {self.attention_state.value}, rev={self.revision})")
 
-    # --- Serialización JSON ---
+    # --- JSON serialization ---
 
     def to_dict(self) -> dict:
         return {
@@ -382,7 +382,7 @@ class SeismicEvent:
         event.priority = event._calculate_priority()
         return event
 
-    # --- Validación ---
+    # --- Validation ---
 
     @staticmethod
     def validate_data(event_id: int, magnitude: float, depth_km: float,
