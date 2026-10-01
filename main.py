@@ -199,37 +199,20 @@ def get_stations():
 
 
 @eel.expose
-def archive_eligible():
-    """Archiva la rama elegible más grande (acceso rápido)."""
-    return sc.archive_largest_eligible()
-
-
-@eel.expose
-def get_eligible_branches():
-    """Devuelve la lista de ramas elegibles ordenadas por los criterios de la Sección 10."""
-    try:
-        branches = sc.find_eligible_branches()
-        result = []
-        for b in branches:
-            result.append({
-                "root_id": b["root_id"],
-                "count": b["count"],
-                "root_depth": b["root_depth"],
-                "event_ids": b["event_ids"],
-                "root_key": str(b["root_key"]),
-            })
-        return {"ok": True, "branches": result}
-    except Exception as e:
-        return {"ok": False, "message": str(e), "branches": []}
+def preview_archive():
+    """Vista previa del archivo (Sección 10): la rama que elige la regla,
+    sus IDs, su cantidad y la justificación, antes de ejecutar."""
+    return {"ok": True, **sc.preview_archive()}
 
 
 @eel.expose
 def archive_selected_branch(event_ids):
-    """Archiva la rama formada por los event_ids dados (acción deshaciable)."""
+    """Archiva la rama de la vista previa. Si ya no es la que elige la regla
+    (el escenario cambió), se rechaza y no se archiva nada."""
     try:
         count = sc.archive_branch([int(i) for i in event_ids])
         return {"ok": True, "count": count, "event_ids": event_ids}
-    except Exception as e:
+    except (TypeError, ValueError) as e:
         return {"ok": False, "message": str(e)}
 
 

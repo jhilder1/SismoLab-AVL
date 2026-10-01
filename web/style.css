@@ -593,3 +593,22 @@ label.param {
     text-transform: uppercase; letter-spacing: 0.5px;
 }
 label.param input { text-transform: none; letter-spacing: 0; }
+
+/* --- Archive preview (Section 10) --- */
+.archive-criteria { font-size: 0.7rem; color: var(--text2); margin: 0 0 6px; }
+.archive-card {
+    background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--yellow);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 0.75rem;
+}
+.archive-title { font-weight: 600; color: var(--text); }
+.archive-detail { color: var(--text2); margin: 2px 0; }
+.archive-ids { color: var(--text2); font-size: 0.7rem; word-break: break-word; margin-bottom: 4px; }
+.archive-why { margin: 4px 0 8px 16px; padding: 0; color: var(--text); font-size: 0.72rem; }
+.archive-section { font-size: 0.72rem; font-weight: 600; color: var(--text); margin: 8px 0 4px; }
+.archive-other { font-size: 0.7rem; color: var(--text2); margin-bottom: 3px; }
+.archive-none { padding: 8px 0; }
+
+/* --- Event consultation (Section 6) --- */
+.detail-group { margin-top: 6px; line-height: 1.45; }
+.detail-group b { color: var(--text); font-weight: 600; }
+.costly-flag { color: var(--yellow); font-weight: 600; }

@@ -39,7 +39,7 @@ def rich_scenario() -> Scenario:
     sc.mark_reviewed(10)
     sc.correct_event(60, magnitude=6.2, depth_km=15.0)
     sc.delete_event(20)
-    sc.archive_branch([50])
+    sc._archive_ids([50])  # fixture: put one event in the history directly
     sc.enqueue_report(Report(30, 2, "EST-002", 6.1, 20.0, Epicenter(105, 100), T0))
     sc.enqueue_report(Report(99, 1, "EST-001", 4.0, 5.0, Epicenter(10, 10), T0))
     sc.W_hours, sc.R_km, sc.L_depth, sc.T_archive_hours = 24.0, 30.0, 2, 48.0

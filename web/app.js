@@ -431,6 +431,29 @@ function formatEventId(id) {
     return "SIS-" + String(id).padStart(6, "0");
 }
 
+// Current data of an event as the consultation of Section 6 lists it.
+function eventDetailsHtml(e, key) {
+    const date = (e.occurrence_time || "").replace("T", " ").replace("Z", " UTC");
+    const stations = (e.reporting_stations || []).map(esc).join(", ") || "--";
+    return `<div class="detail-group">
+        <b>Datos vigentes:</b> M=${e.magnitude} | H=${e.depth_km} km | epicentro (${e.epicenter.x}, ${e.epicenter.y}) | ${esc(date)}<br>
+        Revision ${e.revision} | estaciones con reportes aceptados: ${stations}<br>
+        Zona poblada: ${e.in_populated_zone ? "si" : "no"} | prioridad ${PRIORITY_NAME[e.priority] || e.priority}
+        | clave ${esc(key)} | atencion: ${e.attention_state === "reviewed" ? "revisado" : "pendiente"}
+    </div>`;
+}
+
+function associationsHtml(a) {
+    if (!a) return "";
+    const item = r => `${formatEventId(r.event_id)} (M=${r.magnitude}${r.status === "archived" ? ", archivado" : ""})`;
+    const list = rows => rows.length ? rows.map(item).join(", ") : "ninguno";
+    return `<div class="detail-group"><b>Asociaciones:</b>
+        referencia elegida: ${a.reference ? item(a.reference) : "ninguna"}<br>
+        candidatos: ${list(a.candidates)}<br>
+        lo usan como referencia: ${list(a.replicas)}
+    </div>`;
+}
+
 async function searchEvent() {
     const res = await eel.search_event(val("search-id"))();
     const box = $("search-result");
@@ -441,19 +464,22 @@ async function searchEvent() {
         return;
     }
 
-    let html = `<b>${formatEventId(res.event_id)}</b>${statusBadgeHtml(res.status)}<br>`;
-    const e = res.event;
+    let html = `<b>${formatEventId(res.event_id)}</b>${statusBadgeHtml(res.status)}`;
     if (res.status === "active") {
-        html += `M=${e.magnitude} P=${e.priority} | Prof=${e.depth_km}km | Rev=${e.revision}<br>
-            Clave=${esc(res.key)} | Profundidad en arbol: ${res.depth} | Costo acceso: ${res.access_cost}`;
-        log(`Evento activo encontrado. Costo de acceso: ${res.access_cost} nodos`, "info");
+        html += eventDetailsHtml(res.event, res.key) + `<div class="detail-group">
+            <b>En el AVL:</b> profundidad del nodo ${res.depth} | altura ${res.height} |
+            factor de balance ${res.balance_factor} | costo de acceso ${res.access_cost} nodo(s)
+            ${res.costly ? `<br><span class="costly-flag">Acceso costoso: prioridad ALTA y profundidad ${res.depth} &gt; L=${res.limit_L}</span>` : ""}
+        </div>` + associationsHtml(res.associations);
+        log(`Evento activo encontrado. Costo de acceso: ${res.access_cost} nodo(s)`, "info");
     } else if (res.status === "archived") {
-        html += `M=${e.magnitude} P=${e.priority} | Prof=${e.depth_km}km | Rev=${e.revision}<br>
-            Esta en el historico: fuera del AVL activo, conserva datos y asociaciones.`;
+        html += eventDetailsHtml(res.event, res.key)
+            + `<div class="detail-group">Esta en el historico: fuera del AVL activo, conserva datos y asociaciones.</div>`
+            + associationsHtml(res.associations);
         log("El evento esta archivado en el historico", "info");
     } else {
-        html += `Fue eliminado: su ID no se puede reutilizar ni reactivar con reportes.
-            Solo se recupera deshaciendo la eliminacion o restaurando una version.`;
+        html += `<div class="detail-group">Fue eliminado: su ID no se puede reutilizar ni reactivar con reportes.
+            Solo se recupera deshaciendo la eliminacion o restaurando una version.</div>`;
         log("El evento fue eliminado", "info");
     }
     box.innerHTML = html;
@@ -494,6 +520,8 @@ const REPORT_DECISIONS = {
 // here, most recent first.
 let reportHistory = [];
 let continuousRunning = false;
+let continuousLoop = null;      // promise of the running loop, so a recovery can wait for it
+let recoveryRunning = false;    // Section 8: no report is processed while this is true
 
 function renderQueue(reports) {
     const box = $("queue-pending");
@@ -537,6 +565,12 @@ function renderHistory() {
         return;
     }
     box.innerHTML = reportHistory.map(entry => {
+        if (entry.note) {
+            return `<div class="history-entry family-reject">
+                <div class="history-head"><span class="history-decision">Pausa</span></div>
+                <div class="history-why">${esc(entry.note)}</div>
+            </div>`;
+        }
         const meta = REPORT_DECISIONS[entry.result] || { label: entry.result, family: "confirm", why: "" };
         const rot = entry.rotations;
         const rotated = rot.ll || rot.rr || rot.lr || rot.rl || rot.simple_left || rot.simple_right;
@@ -561,6 +595,9 @@ function renderHistory() {
 // produced are the AVL's rotation counters before this call minus after.
 // Nothing is dequeued on EMPTY or PAUSED, so no history entry is added then.
 async function processOneReport() {
+    if (recoveryRunning) {
+        return { result: "PAUSED", message: "Recuperacion global en curso: la cola esta en pausa" };
+    }
     const pending = lastState && lastState.queued_reports ? lastState.queued_reports[0] : null;
     const before = lastState ? { ...lastState.rotations } : null;
 
@@ -607,18 +644,33 @@ async function processReport() {
 // visible pause in between (Section 8). continuousRunning guards against two
 // loops at once; the loop also stops on an empty queue (via EMPTY), on
 // PAUSED (a recovery is running), or when the button is clicked again.
+let wakeContinuous = null;      // ends the pause between steps early
+
+function sleepContinuous(ms) {
+    return new Promise(resolve => {
+        const timer = setTimeout(resolve, ms);
+        wakeContinuous = () => { clearTimeout(timer); resolve(); };
+    });
+}
+
 async function processContinuous() {
-    const button = $("btn-continuous");
     if (continuousRunning) {
-        continuousRunning = false;   // "Pausar": the loop checks this before its next step
+        await pauseContinuous();
         return;
     }
-
+    if (recoveryRunning) {
+        log("Recuperacion global en curso: la cola esta en pausa", "info");
+        return;
+    }
     continuousRunning = true;
+    const button = $("btn-continuous");
     button.textContent = "Pausar";
     button.classList.replace("btn-primary", "btn-danger");
+    continuousLoop = runContinuousLoop(Number(val("continuous-delay")));
+    await continuousLoop;
+}
 
-    const delay = Number(val("continuous-delay"));
+async function runContinuousLoop(delay) {
     try {
         while (continuousRunning) {
             const result = await processOneReport();
@@ -627,14 +679,48 @@ async function processContinuous() {
                 break;
             }
             if (!continuousRunning) break;
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await sleepContinuous(delay);
         }
     } finally {
         continuousRunning = false;
+        wakeContinuous = null;
+        const button = $("btn-continuous");
         button.textContent = "Procesar continuo";
         button.classList.replace("btn-danger", "btn-primary");
     }
 }
+
+// Stops the continuous loop and waits until it has really stopped: the step
+// in progress is resolved completely first (Section 8). Returns whether a
+// loop was running; `note` is written to the decision history when it was.
+async function pauseContinuous(note) {
+    if (!continuousRunning) return false;
+    continuousRunning = false;
+    if (wakeContinuous) wakeContinuous();
+    await continuousLoop;
+    if (note) {
+        reportHistory.unshift({ note });
+        renderHistory();
+    }
+    return true;
+}
+
+// Section 8: asking for a global recovery pauses report processing. The
+// running step finishes, then the recovery runs while no step can start;
+// afterwards the queue stays paused until the user resumes it.
+async function runWithQueuePaused(action) {
+    recoveryRunning = true;
+    try {
+        const paused = await pauseContinuous(
+            "Recuperacion global solicitada: el procesamiento continuo se detuvo despues del "
+            + "paso en curso. Pulsa Procesar continuo para reanudar.");
+        return { res: await action(), paused };
+    } finally {
+        recoveryRunning = false;
+    }
+}
+
+const RESUME_HINT = "La cola quedo en pausa: pulsa Procesar continuo para reanudar.";
 
 async function undoAction() {
     const res = await eel.undo_action()();
@@ -651,21 +737,31 @@ async function redoAction() {
 }
 
 async function toggleStress() {
-    const res = await eel.toggle_stress()();
-    log("Modo estres: " + (res.stress_mode ? "ACTIVADO" : "desactivado"), res.stress_mode ? "err" : "ok");
+    // Leaving stress mode runs a global recovery first, so it also pauses the queue.
+    const leaving = Boolean(lastState && lastState.stress_mode);
+    const call = () => eel.toggle_stress()();
+    const { res, paused } = leaving ? await runWithQueuePaused(call) : { res: await call(), paused: false };
+
+    let msg = res.message || ("Modo estres: " + (res.stress_mode ? "ACTIVADO" : "desactivado"));
+    if (res.errors && res.errors.length) {
+        msg += ` (${res.errors.length} problema(s) en la auditoria; el primero: ${res.errors[0]})`;
+    }
+    if (paused) msg += " " + RESUME_HINT;
+    log(msg, res.stress_mode ? "err" : "ok");
     refresh();
 }
 
 async function recoverBalance() {
-    const res = await eel.recover_balance()();
+    const { res, paused } = await runWithQueuePaused(() => eel.recover_balance()());
+    const pauseText = paused ? "\n\n" + RESUME_HINT : "";
     if (res.result === "RECOVERED") {
         const c = res.cost;
-        const msg = `Balance recuperado.\n\nRotaciones realizadas:\nLL=${c.ll}  RR=${c.rr}  LR=${c.lr}  RL=${c.rl}\nAltura final del árbol=${c.final_height}`;
+        const msg = `Balance recuperado.\n\nRotaciones realizadas:\nLL=${c.ll}  RR=${c.rr}  LR=${c.lr}  RL=${c.rl}\nAltura final del árbol=${c.final_height}` + pauseText;
         log(msg.replace(/\n/g, ' '), "ok");
         alert(msg);
     } else {
-        log(res.message, "info");
-        alert(res.message);
+        log(res.message + (paused ? " " + RESUME_HINT : ""), "info");
+        alert(res.message + pauseText);
     }
     refresh();
 }
@@ -689,70 +785,73 @@ async function advanceClock() {
     refresh();
 }
 
-// Muestra las ramas elegibles para que el usuario elija cuál archivar (Sección 10)
+// Section 10: the rule picks the branch; the user sees which one, its ids,
+// how many events and why, and can only confirm that one.
+const ARCHIVE_BUTTON_TEXT = "Archivar rama de eventos antiguos";
+
 async function showEligibleBranches() {
     const panel = $("eligible-branches-panel");
-    const list  = $("eligible-branches-list");
-    const btn   = $("btn-show-branches");
-
-    // Toggle: si ya está abierto, lo cierra
+    const btn = $("btn-show-branches");
     if (panel.style.display !== "none") {
         panel.style.display = "none";
-        btn.textContent = "Consultar ramas elegibles";
+        btn.textContent = ARCHIVE_BUTTON_TEXT;
         return;
     }
-
     btn.textContent = "Cargando…";
-    const res = await eel.get_eligible_branches()();
-    btn.textContent = "Consultar ramas elegibles";
-
-    if (!res.ok) {
-        log(res.message || "Error al consultar ramas", "err");
-        return;
-    }
-
-    if (res.branches.length === 0) {
-        list.innerHTML = `<p class="muted" style="font-size:0.78rem; padding:0.4rem 0;">
-            Sin ramas elegibles. Las ramas deben ser de prioridad BAJA y antigüedad &gt; T horas.
-        </p>`;
-    } else {
-        list.innerHTML = res.branches.map((b, i) => {
-            const badge = i === 0
-                ? `<span style="font-size:0.68rem;background:#4ade80;color:#000;border-radius:3px;padding:1px 5px;margin-left:4px;">MEJOR</span>`
-                : "";
-            const ids = b.event_ids.map(id => `SIS-${String(id).padStart(6,"0")}`).join(", ");
-            return `<div class="branch-card" style="
-                    background:#1e2a3a; border:1px solid #2d3f55; border-radius:6px;
-                    padding:0.6rem 0.75rem; margin-bottom:0.5rem; font-size:0.78rem;">
-                <div style="font-weight:600; color:#7dd3fc; margin-bottom:0.25rem;">
-                    Raíz SIS-${String(b.root_id).padStart(6,"0")}${badge}
-                </div>
-                <div style="color:#94a3b8; margin-bottom:0.4rem;">
-                    ${b.count} nodo${b.count !== 1 ? "s" : ""} &bull; Profundidad en árbol: ${b.root_depth} &bull; Clave: ${esc(b.root_key)}
-                </div>
-                <div style="color:#64748b; margin-bottom:0.5rem; font-size:0.72rem; word-break:break-all;">
-                    ${esc(ids)}
-                </div>
-                <button onclick="archiveBranch(${JSON.stringify(b.event_ids)})"
-                        class="btn btn-sm btn-warn"
-                        style="width:100%; font-size:0.73rem; padding:0.3rem;">
-                    Archivar esta rama (${b.count} eventos)
-                </button>
-            </div>`;
-        }).join("");
-    }
+    const preview = await eel.preview_archive()();
+    btn.textContent = ARCHIVE_BUTTON_TEXT;
+    $("eligible-branches-list").innerHTML = archivePreviewHtml(preview);
     panel.style.display = "block";
 }
 
+function archivePreviewHtml(p) {
+    const ids = list => list.map(formatEventId).join(", ");
+    let html = `<p class="archive-criteria">${esc(p.criteria)}</p>`;
+
+    if (!p.selected) {
+        html += `<p class="muted archive-none">${esc(p.justification[0])} El escenario se conserva.</p>`;
+    } else {
+        const b = p.selected;
+        html += `<div class="archive-card">
+            <div class="archive-title">Rama seleccionada: raiz ${formatEventId(b.root_id)}</div>
+            <div class="archive-detail">${b.count} evento(s) | profundidad de la raiz: ${b.root_depth} | clave ${esc(b.root_key)}</div>
+            <div class="archive-ids">${esc(ids(b.event_ids))}</div>
+            <ul class="archive-why">${p.justification.map(j => `<li>${esc(j)}</li>`).join("")}</ul>
+            <button onclick='archiveBranch(${JSON.stringify(b.event_ids)})' class="btn btn-sm btn-warn full-w">
+                Archivar esta rama (${b.count} eventos)</button>
+        </div>`;
+    }
+
+    if (p.others.length) {
+        html += `<div class="archive-section">Otras ramas elegibles (no seleccionadas)</div>`;
+        html += p.others.map(o => `<div class="archive-other">${formatEventId(o.root_id)}:
+            ${o.count} evento(s) — ${esc(o.why_not)}</div>`).join("");
+    }
+
+    const rejected = p.rejected_low_roots;
+    if (rejected.length) {
+        const shown = rejected.slice(0, 8);
+        html += `<div class="archive-section">Raices de prioridad BAJA no elegibles</div>`;
+        html += shown.map(r => `<div class="archive-other">${formatEventId(r.root_id)}: su subarbol contiene
+            ${formatEventId(r.offender_id)} (${esc(r.reason)})</div>`).join("");
+        if (rejected.length > shown.length) {
+            html += `<div class="archive-other">… y ${rejected.length - shown.length} mas</div>`;
+        }
+    }
+    return html;
+}
+
 async function archiveBranch(eventIds) {
-    if (!confirm(`¿Archivar ${eventIds.length} evento(s)? Esta acción se puede deshacer.`)) return;
+    if (!confirm(`¿Archivar ${eventIds.length} evento(s)?\n\n${eventIds.map(formatEventId).join(", ")}\n\n`
+            + `Pasan al historico con sus datos y asociaciones. La accion se puede deshacer.`)) return;
     const res = await eel.archive_selected_branch(eventIds)();
     if (res.ok) {
-        log(`Archivados ${res.count} evento(s) correctamente.`, "ok");
+        log(`Archivados ${res.count} evento(s) en una sola accion.`, "ok");
         $("eligible-branches-panel").style.display = "none";
-        $("btn-show-branches").textContent = "Consultar ramas elegibles";
     } else {
+        // The scenario changed since the preview: show the current selection.
         log(res.message || "Error al archivar", "err");
+        $("eligible-branches-list").innerHTML = archivePreviewHtml(await eel.preview_archive()());
     }
     refresh();
 }

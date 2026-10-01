@@ -142,7 +142,7 @@ class LookupStatusTest(unittest.TestCase):
         old = sc.clock - timedelta(days=10)
         sc.create_event(1, 1.0, 10.0, 900, 900, old, "EST-001")
         sc.create_event(2, 5.0, 10.0, 900, 900, T0, "EST-001")
-        sc.archive_branch([1])
+        sc._archive_ids([1])  # fixture: archive directly, no branch is eligible here
         sc.delete_event(2)
 
         archived = sc.lookup_event(1)
@@ -238,6 +238,159 @@ class ArchiveOperationsCounterTest(unittest.TestCase):
             self.assertEqual(sc.total_archive_operations, 0)
         finally:
             shutil.rmtree(tmp)
+
+
+class ArchiveRuleTest(unittest.TestCase):
+    """Defect 2: only the branch selected by Section 10 can be archived."""
+
+    OLD = timedelta(days=10)
+
+    def three_low_and_four_high(self, young_low=None):
+        """Ascending keys build a perfect tree: root 10 (high), left subtree
+        2 -> (1, 3) all LOW, right subtree all HIGH. `young_low` is a LOW id
+        that occurs recently, so it is not old enough to archive."""
+        sc = make_scenario()
+        for i, magnitude in ((1, 1.0), (2, 1.1), (3, 1.2)):
+            when = sc.clock - timedelta(hours=1) if i == young_low else sc.clock - self.OLD
+            sc.create_event(i, magnitude, 10.0, 900, 900, when, "EST-001")
+        for i, magnitude in ((10, 7.0), (11, 7.1), (12, 7.2), (13, 7.3)):
+            sc.create_event(i, magnitude, 10.0, 900, 900, T0, "EST-001")
+        return sc
+
+    def test_preview_shows_the_selected_branch_and_why(self):
+        sc = self.three_low_and_four_high()
+        before = scenario_to_dict(sc)
+        preview = sc.preview_archive()
+        selected = preview["selected"]
+        self.assertEqual((selected["root_id"], sorted(selected["event_ids"])), (2, [1, 2, 3]))
+        self.assertEqual(selected["root_depth"], 1)
+        self.assertIn("prioridad BAJA", preview["justification"][0])
+        self.assertIn("única rama elegible", preview["justification"][1])
+        self.assertEqual(scenario_to_dict(sc), before)   # a preview changes nothing
+
+    def test_low_root_with_a_non_eligible_descendant_is_reported(self):
+        # Section 16: a LOW root is not eligible when a descendant fails the rule.
+        sc = self.three_low_and_four_high(young_low=3)
+        preview = sc.preview_archive()
+        self.assertEqual([b["root_id"] for b in [preview["selected"]] + preview["others"]], [1])
+        self.assertEqual(preview["rejected_low_roots"],
+                         [{"root_id": 2, "offender_id": 3, "reason": preview["rejected_low_roots"][0]["reason"]}])
+        self.assertIn("no supera T", preview["rejected_low_roots"][0]["reason"])
+
+        sc = make_scenario()  # LOW root 2 whose right child is HIGH
+        sc.create_event(2, 1.1, 10.0, 900, 900, sc.clock - self.OLD, "EST-001")
+        sc.create_event(1, 1.0, 10.0, 900, 900, sc.clock - self.OLD, "EST-001")
+        sc.create_event(10, 7.0, 10.0, 900, 900, T0, "EST-001")
+        rejected = sc.preview_archive()["rejected_low_roots"]
+        self.assertEqual([(r["root_id"], r["offender_id"], r["reason"]) for r in rejected],
+                         [(2, 10, "prioridad HIGH")])
+
+    def test_only_the_selected_set_is_accepted(self):
+        sc = self.three_low_and_four_high()
+        before, depth = scenario_to_dict(sc), sc.undo_stack.size()
+        for wrong in ([10], [1], [1, 2], [1, 2, 3, 10]):
+            with self.subTest(ids=wrong):
+                with self.assertRaises(ValueError):
+                    sc.archive_branch(wrong)
+        self.assertEqual(scenario_to_dict(sc), before)
+        self.assertEqual(sc.undo_stack.size(), depth)
+
+        self.assertEqual(sc.archive_branch([3, 1, 2]), 3)   # order does not matter
+        self.assertEqual(sorted(sc.archived), [1, 2, 3])
+
+    def test_stale_preview_is_refused(self):
+        sc = self.three_low_and_four_high()
+        seen = sc.preview_archive()["selected"]["event_ids"]
+        sc.correct_event(3, magnitude=7.5)   # 3 becomes HIGH: the branch changes
+        before = scenario_to_dict(sc)
+        with self.assertRaises(ValueError):
+            sc.archive_branch(seen)
+        self.assertEqual(scenario_to_dict(sc), before)
+
+    def test_nothing_eligible(self):
+        sc = ascending_scenario()            # all LOW, about 110 h old
+        sc.update_parameters(t_archive_hours=1000)   # none is older than T
+        preview = sc.preview_archive()
+        self.assertIsNone(preview["selected"])
+        with self.assertRaises(ValueError):
+            sc.archive_branch([1])
+
+    def test_tie_break_explanations(self):
+        best = {"count": 3, "root_depth": 2, "root_id": 50}
+        lost = Scenario._lost_tie_break
+        self.assertIn("menos nodos", lost(best, {"count": 2, "root_depth": 4, "root_id": 90}))
+        self.assertIn("menos profunda", lost(best, {"count": 3, "root_depth": 1, "root_id": 90}))
+        self.assertIn("ID de su raíz es menor", lost(best, {"count": 3, "root_depth": 2, "root_id": 7}))
+
+
+class LookupDetailsTest(unittest.TestCase):
+    """Defect 5: the consultation shows every field Section 6 lists."""
+
+    def test_active_event_has_every_field(self):
+        sc = ascending_scenario()
+        info = sc.lookup_event(2)
+        event = info["event"]
+        for field in ("magnitude", "depth_km", "epicenter", "occurrence_time", "revision",
+                      "reporting_stations", "in_populated_zone", "priority", "attention_state"):
+            self.assertIn(field, event)
+        for field in ("key", "depth", "height", "balance_factor", "access_cost", "associations"):
+            self.assertIn(field, info)
+        self.assertEqual(event["reporting_stations"], ["EST-001"])
+
+    def test_costly_flag_only_for_deep_high_priority(self):
+        sc = make_scenario()
+        for i, magnitude in ((1, 7.0), (2, 7.1), (3, 7.2)):   # root 2, children 1 and 3
+            sc.create_event(i, magnitude, 10.0, 900, 900, T0, "EST-001")
+        sc.update_parameters(l_depth=0)
+        self.assertFalse(sc.lookup_event(2)["costly"])          # depth 0, not > L
+        self.assertTrue(sc.lookup_event(1)["costly"])           # depth 1 > L = 0
+        sc.update_parameters(l_depth=3)
+        self.assertFalse(sc.lookup_event(1)["costly"])
+
+    def test_associations_of_the_late_report_case(self):
+        # Section 16 "Reporte tardío": 5.6 at 10:00 and 4.2 at 10:20, then 6.1 at 09:55.
+        sc = make_scenario()
+        sc.create_event(10, 5.6, 20.0, 100, 100, T0, "EST-001")
+        sc.create_event(11, 4.2, 20.0, 110, 105, T0 + timedelta(minutes=20), "EST-001")
+        sc.create_event(12, 6.1, 20.0, 105, 100, T0 - timedelta(minutes=5), "EST-001")
+
+        late = sc.lookup_event(11)["associations"]
+        self.assertEqual(late["reference"]["event_id"], 12)     # policy: largest magnitude
+        self.assertEqual([c["event_id"] for c in late["candidates"]], [12, 10])
+        main_shock = sc.lookup_event(12)["associations"]
+        self.assertIsNone(main_shock["reference"])
+        self.assertEqual([r["event_id"] for r in main_shock["replicas"]], [10, 11])
+
+    def test_archived_event_keeps_its_associations(self):
+        sc = make_scenario()
+        old = sc.clock - timedelta(days=10)
+        sc.create_event(10, 5.6, 20.0, 100, 100, old, "EST-001")
+        sc.create_event(11, 4.2, 20.0, 110, 105, old + timedelta(minutes=20), "EST-001")
+        sc._archive_ids([11])  # fixture
+        info = sc.lookup_event(11)
+        self.assertEqual(info["status"], "archived")
+        self.assertEqual(info["associations"]["reference"],
+                         {"event_id": 10, "magnitude": 5.6, "status": "active"})
+
+
+class QueuePauseUiTest(unittest.TestCase):
+    """Defect 8: web/app.js pauses continuous processing during a recovery.
+
+    Runs tests/js/queue_pause.js, which loads app.js with a fake DOM and a
+    fake eel. Skipped when Node.js is not installed.
+    """
+
+    def test_recovery_pauses_continuous_processing(self):
+        import shutil as _shutil
+        import subprocess
+        node = _shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is not installed")
+        result = subprocess.run(
+            [node, os.path.join(ROOT, "tests", "js", "queue_pause.js"),
+             os.path.join(ROOT, "web", "app.js")],
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

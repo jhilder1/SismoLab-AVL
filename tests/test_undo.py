@@ -44,7 +44,7 @@ class UndoRestoresExactStateTest(unittest.TestCase):
         self.assert_undo_restores(rich_scenario(), lambda sc: sc.mark_reviewed(30))
 
     def test_archive(self):
-        self.assert_undo_restores(rich_scenario(), lambda sc: sc.archive_branch([70]))
+        self.assert_undo_restores(rich_scenario(), lambda sc: sc.archive_largest_eligible())
 
     def test_process_report(self):
         self.assert_undo_restores(rich_scenario(), lambda sc: sc.process_next_report())
