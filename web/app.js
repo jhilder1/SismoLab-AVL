@@ -89,6 +89,8 @@ function updateStats(state) {
     $("st-rr").textContent = state.rotations.rr;
     $("st-lr").textContent = state.rotations.lr;
     $("st-rl").textContent = state.rotations.rl;
+    $("st-sl").textContent = state.rotations.simple_left;
+    $("st-sr").textContent = state.rotations.simple_right;
 }
 
 function updateStress(isStress) {
@@ -162,6 +164,7 @@ function showTree(view) {
     $("tab-queries").classList.toggle("active", view === "queries");
     $("tab-queue").classList.toggle("active", view === "queue");
     $("tab-history").classList.toggle("active", view === "history");
+    $("tab-indicators").classList.toggle("active", view === "indicators");
     drawCurrentTree();
 }
 
@@ -171,13 +174,25 @@ function drawCurrentTree() {
     const isQueries = treeView === "queries";
     const isQueue = treeView === "queue";
     const isHistory = treeView === "history";
-    $("tree-svg").style.display = (!isMap && !isQueries && !isQueue && !isHistory) ? "block" : "none";
+    const isIndicators = treeView === "indicators";
+    const isTree = !isMap && !isQueries && !isQueue && !isHistory && !isIndicators;
+    $("tree-svg").style.display = isTree ? "block" : "none";
     $("map-svg").style.display = isMap ? "block" : "none";
     $("map-legend").style.display = isMap ? "flex" : "none";
     $("queries-panel").style.display = isQueries ? "flex" : "none";
     $("queue-panel").style.display = isQueue ? "flex" : "none";
     $("history-panel").style.display = isHistory ? "flex" : "none";
+    $("indicators-panel").style.display = isIndicators ? "flex" : "none";
     $("tree-empty").style.display = "none";
+
+    if (isIndicators) {
+        // Redrawn on every refresh so the values follow each action live.
+        $("tree-root").textContent = "Indicadores, recorridos y registro de acciones (Seccion 14)";
+        renderIndicators(lastState);
+        renderTraversals();
+        refreshActionLog();
+        return;
+    }
 
     if (isQueue) {
         // The pending list and the history are refreshed by their own
@@ -920,22 +935,48 @@ async function runQueryTopK() {
         : '<p class="muted">No hay eventos pendientes.</p>');
 }
 
-async function runQueryInterval() {
-    const minMag = val("q-int-min"), maxMag = val("q-int-max");
+// Why a query could (or could not) skip branches, shown above its results.
+function queryExplainHtml(text, items) {
+    const list = items && items.length ? `<ul>${items.map(i => `<li>${i}</li>`).join("")}</ul>` : "";
+    return `<div class="query-explain">${text}${list}</div>`;
+}
+
+async function runQueryMagnitude() {
+    const minMag = val("q-mag-min"), maxMag = val("q-mag-max");
     if (minMag === "" || maxMag === "") { log("Magnitud minima y maxima son obligatorias", "err"); return; }
-    const depth = val("q-int-depth") || null;
-    // datetime-local gives "YYYY-MM-DDTHH:MM" (no seconds). Checked against
-    // this project's Python (3.11+): datetime.fromisoformat accepts that
-    // directly, so nothing is appended here, same as createEvent's ev-time.
-    const from = val("q-int-from") || null;
-    const to = val("q-int-to") || null;
-    const res = await eel.query_by_interval(minMag, maxMag, depth, from, to)();
+    const res = await eel.query_by_magnitude(minMag, maxMag)();
     if (!res.ok) { showQueryError(res.message); return; }
     const d = res.data;
-    const active = lastState ? lastState.counts.active : "?";
-    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${active} activos | resultados=${d.count}`);
-    showQueryResults(d.results.length ? d.results.map(eventCardHtml).join("")
-        : '<p class="muted">Ningun evento cumple el intervalo.</p>');
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${d.active} activos `
+        + `| subarboles descartados sin visitarlos: ${d.pruned_subtrees} | resultados=${d.count}`);
+    // Section 11 asks which branches K lets us skip: the magnitude bounds the
+    // priority, so only these runs of keys can hold a match.
+    const runs = d.runs.map(r => r.searched
+        ? `<b>${PRIORITY_NAME[r.priority]}</b>: se recorren las claves ${esc(r.text)}`
+        : `<b>${PRIORITY_NAME[r.priority]}</b>: descartada, exige ${esc(r.rule)}`);
+    const explain = queryExplainHtml("Poda por K = (P, M, I): la magnitud limita la prioridad posible, asi que "
+        + "solo estos tramos de claves pueden tener resultados. Un subarbol cuyas claves quedan fuera de "
+        + "todos se descarta completo.", runs);
+    showQueryResults(explain + (d.results.length ? d.results.map(eventCardHtml).join("")
+        : '<p class="muted">Ningun evento activo tiene una magnitud en ese intervalo.</p>'));
+}
+
+async function runQueryDepthDates() {
+    const depth = val("q-dd-depth"), from = val("q-dd-from"), to = val("q-dd-to");
+    if (depth === "" || !from || !to) {
+        log("Indica la profundidad maxima y las fechas desde y hasta", "err");
+        return;
+    }
+    // datetime-local gives "YYYY-MM-DDTHH:MM"; the backend reads it as UTC.
+    const res = await eel.query_by_depth_and_dates(depth, from, to)();
+    if (!res.ok) { showQueryError(res.message); return; }
+    const d = res.data;
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${d.active} activos | resultados=${d.count}`);
+    const explain = queryExplainHtml("La profundidad del hipocentro y la fecha no forman parte de K, asi que la "
+        + "posicion de un nodo no dice nada de ellas: ninguna rama se puede descartar y se examinan todos "
+        + "los nodos, O(n) aun con el arbol balanceado. Resultados en orden de ocurrencia.");
+    showQueryResults(explain + (d.results.length ? d.results.map(eventCardHtml).join("")
+        : '<p class="muted">Ningun evento activo cumple la profundidad y las fechas.</p>'));
 }
 
 async function runQueryAssociations() {
@@ -945,9 +986,11 @@ async function runQueryAssociations() {
     if (!res.ok) { showQueryError(res.message); return; }
     const d = res.data;
 
-    // This query walks active and archived events, not the AVL, so there is
-    // no node-examined count to report here (unlike the other four).
-    showQueryCost(`Esta consulta recorre eventos activos y archivados, no el AVL: no hay nodos examinados que reportar `
+    // The AVL is not walked here: the event comes from the id index and the
+    // candidates from the active and archived events (the AVL does not hold
+    // the archived ones), so the AVL count is 0 and the scan is reported apart.
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} | eventos activos y archivados revisados: `
+        + `${d.events_scanned} (2 pasadas: candidatos y referencias entrantes) `
         + `| candidatos=${d.candidates.length} | referencias entrantes=${d.replicas.length}`);
 
     const statusBadge = s => `<span class="status-badge ${s === "ACTIVO" ? "active" : "archived"}">${s}</span>`;
@@ -982,13 +1025,13 @@ async function runQueryCostly() {
     const res = await eel.query_costly_high_priority()();
     if (!res.ok) { showQueryError(res.message); return; }
     const d = res.data;
-    // The relevant cost here is the sum of nodes visited across every
-    // individual key search, not one tree walk (Sections 9 and 11).
-    const totalVisited = d.costly_events.reduce((sum, c) => sum + c.nodes_visited, 0);
-    showQueryCost(`Nodos visitados en total (suma de cada busqueda por clave): ${totalVisited} `
-        + `| limite L=${d.limit_L} | eventos costosos=${d.count}`);
-    showQueryResults(d.costly_events.length ? d.costly_events.map(costlyCardHtml).join("")
-        : '<p class="muted">Ningun evento de prioridad alta supera el limite L.</p>');
+    showQueryCost(`Nodos del AVL examinados: ${d.nodes_examined} de ${d.active} activos `
+        + `| subarboles descartados: ${d.pruned_subtrees} | limite L=${d.limit_L} | eventos costosos=${d.count}`);
+    const explain = queryExplainHtml("ALTA es la mayor prioridad, asi que sus claves estan a la derecha de todas "
+        + "las demas: el subarbol izquierdo de un nodo de prioridad menor solo tiene claves menores y se descarta. "
+        + "Los nodos visitados al buscar cada evento por su clave son su profundidad + 1.");
+    showQueryResults(explain + (d.costly_events.length ? d.costly_events.map(costlyCardHtml).join("")
+        : '<p class="muted">Ningun evento de prioridad alta supera el limite L.</p>'));
 }
 
 async function runQueryCompare() {
@@ -1040,6 +1083,131 @@ async function runQueryCompare() {
         if ($("compare-avl-svg")) addZoomPan($("compare-avl-svg"));
         if ($("compare-bst-svg")) addZoomPan($("compare-bst-svg"));
     }, 10);
+}
+
+// =====================================================
+// Indicators, traversals and action log (Section 14)
+// =====================================================
+
+// Same names as domain/indicators.py, which the action log also uses.
+const INDICATOR_LABELS = {
+    active: "Eventos activos",
+    archived: "Eventos en el historico",
+    deleted: "IDs eliminados",
+    queue: "Reportes en cola",
+    height: "Altura del AVL",
+    leaves: "Hojas",
+    priority_high: "Prioridad alta",
+    priority_medium: "Prioridad media",
+    priority_low: "Prioridad baja",
+    pending: "Pendientes de atencion",
+    costly: "Con acceso costoso",
+    events_created: "Eventos creados",
+    reports_processed: "Reportes procesados",
+    corrections: "Correcciones aceptadas",
+    reports_discarded: "Reportes descartados",
+    conflicts: "Conflictos",
+    confirmations: "Confirmaciones",
+    archive_operations: "Archivos masivos",
+    archives: "Eventos archivados (acumulado)",
+    ll: "Casos LL",
+    rr: "Casos RR",
+    lr: "Casos LR",
+    rl: "Casos RL",
+    simple_left: "Giros simples a la izquierda",
+    simple_right: "Giros simples a la derecha",
+};
+
+const INDICATOR_GROUPS = [
+    ["ind-structure", ["active", "archived", "deleted", "queue", "height", "leaves"]],
+    ["ind-priority", ["priority_high", "priority_medium", "priority_low", "pending", "costly"]],
+    ["ind-operations", ["corrections", "reports_discarded", "conflicts", "confirmations",
+                        "archive_operations", "archives", "events_created", "reports_processed"]],
+    ["ind-rotations", ["ll", "rr", "lr", "rl", "simple_left", "simple_right"]],
+];
+
+const ACTION_LABELS = {
+    CREATE: "Crear evento", CORRECT: "Corregir evento", DELETE: "Eliminar evento",
+    REVIEW: "Marcar revisado", ENQUEUE_REPORT: "Encolar reporte", PROCESS_REPORT: "Paso de la cola",
+    ARCHIVE: "Archivo masivo", TOGGLE_STRESS: "Cambio de modo", RECOVER: "Recuperacion global",
+    ADVANCE_CLOCK: "Avance del reloj", PARAM_UPDATE: "Cambio de parametros",
+    LOAD_TOPOLOGY: "Carga por topologia", LOAD_INSERTIONS: "Carga por inserciones",
+    RESTORE_VERSION: "Restaurar version", UNDO: "Deshacer", REDO: "Rehacer",
+};
+
+function renderIndicators(state) {
+    const values = state.indicators;
+    for (const [id, names] of INDICATOR_GROUPS) {
+        $(id).innerHTML = names.map(name => {
+            const label = name === "costly"
+                ? `${INDICATOR_LABELS.costly} (alta y profundidad > L=${state.parameters.L_depth})`
+                : INDICATOR_LABELS[name];
+            return `<tr><td>${esc(label)}</td><td>${values[name]}</td></tr>`;
+        }).join("");
+    }
+}
+
+const TRAVERSALS = ["inorder", "preorder", "postorder", "level_order"];
+
+// Nodes per level of the drawn tree, to split the level-order list by level.
+function levelSizes(root) {
+    const sizes = [];
+    let level = root ? [root] : [];
+    while (level.length) {
+        sizes.push(level.length);
+        level = level.flatMap(n => [n.left, n.right].filter(Boolean));
+    }
+    return sizes;
+}
+
+// The backend sends each traversal as keys [P, M, I]; the selector shows
+// either the event id or the whole key.
+function renderTraversals() {
+    if (!lastState || !lastState.traversals) return;
+    const asKey = val("trav-format") === "key";
+    const show = k => asKey ? `(${k[0]}, ${k[1]}, ${k[2]})` : String(k[2]);
+    for (const name of TRAVERSALS) {
+        const keys = lastState.traversals[name];
+        $(`trav-n-${name}`).textContent = `(${keys.length} nodos)`;
+        let html;
+        if (!keys.length) {
+            html = '<span class="muted">Arbol vacio.</span>';
+        } else if (name === "level_order") {
+            let start = 0;
+            html = levelSizes(lastState.tree.nodes).map((size, depth) => {
+                const row = keys.slice(start, start + size).map(show).join("  ");
+                start += size;
+                return `<div><span class="trav-level">Nivel ${depth}:</span> ${esc(row)}</div>`;
+            }).join("");
+        } else {
+            html = esc(keys.map(show).join(" → "));
+        }
+        $(`trav-${name}`).innerHTML = html;
+    }
+}
+
+function changeHtml(c) {
+    const delta = c.after - c.before;
+    return `<span class="chg ${delta > 0 ? "up" : "down"}">${esc(INDICATOR_LABELS[c.name] || c.name)}: `
+        + `${c.before} &rarr; ${c.after} (${delta > 0 ? "+" : ""}${delta})</span>`;
+}
+
+async function refreshActionLog() {
+    const entries = await eel.get_action_log(100)();
+    const box = $("action-log");
+    if (!entries.length) {
+        box.innerHTML = '<p class="muted">Sin acciones registradas en esta sesion.</p>';
+        return;
+    }
+    box.innerHTML = entries.map(e => `<div class="action-entry">
+        <div class="action-head">
+            <span class="action-type">#${e.seq} ${esc(ACTION_LABELS[e.type] || e.type)}</span>
+            <span class="action-clock">reloj ${esc(e.clock.replace("T", " ").replace("Z", ""))}</span>
+        </div>
+        <div class="action-desc">${esc(e.description)}</div>
+        <div class="action-changes">${e.changes.length ? e.changes.map(changeHtml).join("")
+            : '<span class="muted">No cambio ningun indicador.</span>'}</div>
+    </div>`).join("");
 }
 
 // =====================================================

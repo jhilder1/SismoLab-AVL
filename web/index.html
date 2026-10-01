@@ -45,6 +45,8 @@
         <div class="stat"><span class="stat-val" id="st-rr">0</span><span class="stat-lbl">RR</span></div>
         <div class="stat"><span class="stat-val" id="st-lr">0</span><span class="stat-lbl">LR</span></div>
         <div class="stat"><span class="stat-val" id="st-rl">0</span><span class="stat-lbl">RL</span></div>
+        <div class="stat"><span class="stat-val" id="st-sl">0</span><span class="stat-lbl">Giro izq</span></div>
+        <div class="stat"><span class="stat-val" id="st-sr">0</span><span class="stat-lbl">Giro der</span></div>
     </div>
 
     <!-- MAIN LAYOUT -->
@@ -190,6 +192,7 @@
                     <button id="tab-queries" onclick="showTree('queries')" class="btn btn-sm tab">Consultas</button>
                     <button id="tab-queue" onclick="showTree('queue')" class="btn btn-sm tab">Cola</button>
                     <button id="tab-history" onclick="showTree('history')" class="btn btn-sm tab">Histórico</button>
+                    <button id="tab-indicators" onclick="showTree('indicators')" class="btn btn-sm tab">Indicadores</button>
                 </div>
                 <span id="tree-root" class="tree-root-label">Raiz: --</span>
             </div>
@@ -210,7 +213,8 @@
                 <div id="queries-panel" class="queries-panel" style="display:none">
                     <div class="query-tabs">
                         <button class="btn btn-sm qtab active" data-q="topk" onclick="window.showQuery('topk')">Top k pendientes</button>
-                        <button class="btn btn-sm qtab" data-q="interval" onclick="window.showQuery('interval')">Intervalo</button>
+                        <button class="btn btn-sm qtab" data-q="magnitude" onclick="window.showQuery('magnitude')">Magnitud</button>
+                        <button class="btn btn-sm qtab" data-q="depthdates" onclick="window.showQuery('depthdates')">Profundidad y fechas</button>
                         <button class="btn btn-sm qtab" data-q="assoc" onclick="window.showQuery('assoc')">Asociaciones</button>
                         <button class="btn btn-sm qtab" data-q="costly" onclick="window.showQuery('costly')">Acceso costoso</button>
                         <button class="btn btn-sm qtab" data-q="compare" onclick="window.showQuery('compare')">Comparativa AVL/BST</button>
@@ -222,19 +226,22 @@
                             <button onclick="window.runQueryTopK()" class="btn btn-primary">Consultar</button>
                         </div>
                     </div>
-                    <div id="qform-interval" class="query-form hidden">
+                    <div id="qform-magnitude" class="query-form hidden">
                         <div class="form-row">
-                            <input type="number" id="q-int-min" placeholder="Magnitud minima" step="0.1">
-                            <input type="number" id="q-int-max" placeholder="Magnitud maxima" step="0.1">
+                            <input type="number" id="q-mag-min" placeholder="Magnitud minima" step="0.1">
+                            <input type="number" id="q-mag-max" placeholder="Magnitud maxima" step="0.1">
+                            <button onclick="window.runQueryMagnitude()" class="btn btn-primary">Consultar</button>
+                        </div>
+                    </div>
+                    <div id="qform-depthdates" class="query-form hidden">
+                        <div class="form-row">
+                            <input type="number" id="q-dd-depth" placeholder="Profundidad maxima del hipocentro (km)" step="0.1" min="0">
                         </div>
                         <div class="form-row">
-                            <input type="number" id="q-int-depth" placeholder="Profundidad maxima km (opcional)" step="0.1">
+                            <label class="param">Desde<input type="datetime-local" id="q-dd-from"></label>
+                            <label class="param">Hasta<input type="datetime-local" id="q-dd-to"></label>
                         </div>
-                        <div class="form-row">
-                            <label class="param">Desde (opcional)<input type="datetime-local" id="q-int-from"></label>
-                            <label class="param">Hasta (opcional)<input type="datetime-local" id="q-int-to"></label>
-                        </div>
-                        <button onclick="window.runQueryInterval()" class="btn btn-primary full-w">Consultar</button>
+                        <button onclick="window.runQueryDepthDates()" class="btn btn-primary full-w">Consultar</button>
                     </div>
                     <div id="qform-assoc" class="query-form hidden">
                         <div class="form-row">
@@ -275,6 +282,37 @@
 
                 <div id="history-panel" class="history-panel" style="display:none">
                     <div id="archived-list" class="archived-list" style="padding: 1rem;"></div>
+                </div>
+
+                <!-- Indicadores (Seccion 14) -->
+                <div id="indicators-panel" class="indicators-panel" style="display:none">
+                    <div class="ind-grid">
+                        <div class="ind-group"><h4>Estructura</h4><table id="ind-structure" class="ind-table"></table></div>
+                        <div class="ind-group"><h4>Prioridad y atencion</h4><table id="ind-priority" class="ind-table"></table></div>
+                        <div class="ind-group"><h4>Operaciones</h4><table id="ind-operations" class="ind-table"></table></div>
+                        <div class="ind-group"><h4>Balanceo</h4><table id="ind-rotations" class="ind-table"></table>
+                            <p class="ind-note">Un caso doble (LR o RL) cuenta como un caso y dos giros elementales.</p>
+                        </div>
+                    </div>
+
+                    <div class="ind-head">
+                        <h4>Recorridos del AVL activo</h4>
+                        <label class="param">Mostrar
+                            <select id="trav-format" onchange="renderTraversals()">
+                                <option value="id">ID del evento</option>
+                                <option value="key">Clave K = (P, M, I)</option>
+                            </select>
+                        </label>
+                    </div>
+                    <details class="traversal" open><summary>Inorden <span id="trav-n-inorder"></span></summary><div id="trav-inorder" class="trav-seq"></div></details>
+                    <details class="traversal"><summary>Preorden <span id="trav-n-preorder"></span></summary><div id="trav-preorder" class="trav-seq"></div></details>
+                    <details class="traversal"><summary>Postorden <span id="trav-n-postorder"></span></summary><div id="trav-postorder" class="trav-seq"></div></details>
+                    <details class="traversal"><summary>Por niveles <span id="trav-n-level_order"></span></summary><div id="trav-level_order" class="trav-seq"></div></details>
+
+                    <div class="ind-head"><h4>Registro de acciones</h4></div>
+                    <p class="ind-note">Cada accion muestra los indicadores que cambio (antes &rarr; despues). Deshacer y rehacer
+                        se registran como acciones propias. El registro es de esta sesion: no se guarda en el escenario.</p>
+                    <div id="action-log"></div>
                 </div>
 
                 <p id="tree-empty" class="tree-empty">Arbol vacio. Crea un evento para empezar.</p>

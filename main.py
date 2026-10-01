@@ -11,7 +11,7 @@ import os
 import eel
 from datetime import datetime
 from domain.scenario import Scenario
-from domain.models import Epicenter, Report, Zone, Station
+from domain.models import Epicenter, Report, Zone, Station, parse_time
 from domain.storage import StateError
 from domain.versions import VersionStore
 
@@ -226,16 +226,31 @@ def query_top_k_pending(k=5):
 
 
 @eel.expose
-def query_by_interval(min_mag, max_mag, max_depth=None, start_date_str=None, end_date_str=None):
-    """Consulta eventos por rango de magnitud, profundidad y fechas."""
+def query_by_magnitude(min_mag, max_mag):
+    """Eventos con magnitud en un intervalo inclusivo, con poda por K (Sección 11)."""
     try:
-        s_date = datetime.fromisoformat(start_date_str) if start_date_str else None
-        e_date = datetime.fromisoformat(end_date_str) if end_date_str else None
-        m_depth = float(max_depth) if max_depth not in (None, "", "null") else None
-        res = sc.query_by_interval(float(min_mag), float(max_mag), m_depth, s_date, e_date)
-        return {"ok": True, "data": res}
-    except Exception as e:
+        return {"ok": True, "data": sc.query_by_magnitude(float(min_mag), float(max_mag))}
+    except (TypeError, ValueError) as e:
         return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def query_by_depth_and_dates(max_depth, start_date_str, end_date_str):
+    """Eventos con profundidad <= límite dentro de un intervalo inclusivo de fechas."""
+    if max_depth in (None, "") or not start_date_str or not end_date_str:
+        return {"ok": False, "message": "La profundidad máxima y las fechas desde y hasta son obligatorias"}
+    try:
+        res = sc.query_by_depth_and_dates(float(max_depth), parse_time(start_date_str),
+                                          parse_time(end_date_str))
+        return {"ok": True, "data": res}
+    except (TypeError, ValueError) as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def get_action_log(limit=100):
+    """Registro de acciones con los indicadores que cambió cada una (Sección 14)."""
+    return sc.get_action_log(int(limit))
 
 
 @eel.expose

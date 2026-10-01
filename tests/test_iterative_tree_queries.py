@@ -1,7 +1,8 @@
 """
 Regression tests for the iterative conversion of the three tree walks that
-used to be recursive: Scenario.query_top_k_pending, Scenario.query_by_interval
-and Scenario.find_eligible_branches (with its _is_subtree_eligible helper).
+used to be recursive: Scenario.query_top_k_pending, Scenario.query_by_magnitude
+(formerly query_by_interval) and Scenario.find_eligible_branches (with its
+_is_subtree_eligible helper).
 
 Two kinds of test per function:
   - "no_recursion_error": run it over a genuinely degenerate tree (a straight
@@ -115,25 +116,27 @@ def test_query_top_k_pending_k_larger_than_pending_events():
 
 
 # =====================================================================
-# query_by_interval
+# query_by_magnitude
 # =====================================================================
 
-def test_query_by_interval_degenerate_tree_no_recursion_error():
+def test_query_by_magnitude_degenerate_tree_no_recursion_error():
     sc = _make_scenario()
     _degenerate_chain(sc, 1500)
 
-    result = sc.query_by_interval(min_mag=0.0, max_mag=10.0)
+    result = sc.query_by_magnitude(min_mag=0.0, max_mag=10.0)
     assert result["count"] == 1500
     assert result["nodes_examined"] == 1500
 
 
-def test_query_by_interval_matches_expected_small_tree():
+def test_query_by_magnitude_matches_expected_small_tree():
     sc = _make_scenario()
     _small_bst(sc)
 
-    result = sc.query_by_interval(min_mag=1.0, max_mag=3.0)
-    # A full pre-order walk always visits every node exactly once, regardless
-    # of the filter, so nodes_examined is the tree size.
+    result = sc.query_by_magnitude(min_mag=1.0, max_mag=3.0)
+    # Pruning by K skips nothing here: every subtree could still hold a key of
+    # the run (1, 1.0, *) to (1, 3.0, *). id4 (M=0.5) is visited because a key
+    # (1, 1.0, 1) would sit under it, and id7 (M=3.5) because (1, 3.0, 4)
+    # would. tests/test_queries_indicators.py covers trees where it does skip.
     assert result["nodes_examined"] == 7
     matched_ids = {r["event_id"] for r in result["results"]}
     # magnitudes in [1.0, 3.0]: id2(1.0), id5(1.5), id1(2.0), id6(2.5), id3(3.0)

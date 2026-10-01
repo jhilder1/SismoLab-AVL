@@ -121,7 +121,7 @@ def scenario_to_dict(sc) -> dict:
             "reports": [r.to_dict() for r in sc.report_queue.get_all()],
             "total_enqueued": sc.report_queue.total_enqueued,
         },
-        "metrics": _metrics_to_dict(sc),
+        "metrics": metrics_to_dict(sc),
     }
 
 
@@ -170,7 +170,7 @@ def _bst_to_dict(bst: BSTTree) -> dict:
     return {"root": bst.root.event_id if bst.root else None, "nodes": nodes}
 
 
-def _metrics_to_dict(sc) -> dict:
+def metrics_to_dict(sc) -> dict:
     metrics = {name: getattr(sc, attr) for attr, name in _SCENARIO_METRICS.items()}
     metrics["rotations"] = {name: getattr(sc.avl, attr)
                             for attr, name in _ROTATION_METRICS.items()}

@@ -48,7 +48,9 @@ debe usar para correr la suite completa.
 | `tests/test_loading.py` | Guardado, carga por topología y por inserciones, validaciones (sección 12) |
 | `tests/test_versions.py` | Versiones con nombre que persisten al cerrar el programa (sección 13) |
 | `tests/test_section16_persistence.py` | Caso "Persistencia y consistencia" de la sección 16, paso a paso, y reproducibilidad de `data/` |
-| `tests/test_iterative_tree_queries.py` | `query_top_k_pending`, `query_by_interval` y `find_eligible_branches` sobre un árbol degenerado (sin RecursionError) y equivalencia exacta con la versión recursiva anterior en un árbol chico |
+| `tests/test_iterative_tree_queries.py` | `query_top_k_pending`, `query_by_magnitude` y `find_eligible_branches` sobre un árbol degenerado (sin RecursionError) y equivalencia exacta con la versión recursiva anterior en un árbol chico |
+| `tests/test_review_fixes.py` | Fallas de la revisión: decimales, comparativa AVL/BST, consulta completa del evento, vista previa al eliminar, regla de archivo y pausa de la cola (secciones 3, 6, 8, 10, 11, 14) |
+| `tests/test_queries_indicators.py` | Consultas de la sección 11 (poda por K, profundidad y fechas, acceso costoso) contra un recorrido completo, e indicadores y registro de acciones de la sección 14 |
 | `tests/test_audit_associations.py` | `run_audit` detecta una referencia que existe pero viola magnitud/tiempo/W/R, y ciclos en la cadena de referencias (sección 14 sobre sección 7) |
 
 ## Arquitectura

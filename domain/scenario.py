@@ -6,18 +6,23 @@ estaciones, parámetros y métricas. Toda operación pasa por aquí.
 """
 
 import os
+from collections import deque
 from datetime import datetime, timedelta
 from typing import Optional
 
 from domain.models import (
     SeismicEvent, Report, Association, Epicenter, Zone, Station,
-    Priority, AttentionState, EventStatus,
+    Priority, AttentionState, EventStatus, format_time,
 )
 from domain.storage import scenario_to_dict, apply_state, read_json_file, write_json_file
+from domain.indicators import indicators_of, indicators_from_state, indicator_changes
 from domain.loader import load_topology, load_insertions, compare_loaded_trees
 from domain.validation import check_tree
 from core.avl_tree import AVLTree, BSTTree, TreeKey
 from core.linear import UndoStack, ReportQueue
+
+# Entries kept in the action log (Section 14). Older ones are dropped first.
+ACTION_LOG_SIZE = 200
 
 
 class Scenario:
@@ -57,6 +62,12 @@ class Scenario:
 
         # Section 8: the queue is paused while a global recovery is running.
         self._recovery_in_progress = False
+
+        # Section 14: one entry per action with the indicators it changed.
+        # Session-only and append-only: an undo adds its own entry instead of
+        # erasing one, so the log still explains every value shown so far.
+        self.action_log: deque = deque(maxlen=ACTION_LOG_SIZE)
+        self.actions_logged = 0
 
     def id_exists_anywhere(self, event_id: int) -> bool:
         return (event_id in self.event_index
@@ -135,47 +146,44 @@ class Scenario:
             "type": action_type, "before": before, "description": description,
         })
         self.redo_stack = UndoStack()
+        self._log_action(action_type, description, before)
+
+    def _log_action(self, action_type: str, description: str, before: dict) -> None:
+        """Add an action to the log with every indicator it changed (Section 14:
+        "El registro de una acción debe permitir explicar cómo se obtuvieron
+        sus métricas"). `before` is the snapshot taken when the action started."""
+        self.actions_logged += 1
+        self.action_log.append({
+            "seq": self.actions_logged,
+            "type": action_type,
+            "description": description,
+            "clock": format_time(self.clock),
+            "changes": indicator_changes(indicators_from_state(before), indicators_of(self)),
+        })
+
+    def get_action_log(self, limit: int = ACTION_LOG_SIZE) -> list[dict]:
+        """Most recent actions first."""
+        return list(reversed(self.action_log))[:max(0, limit)]
 
     def summary(self) -> dict:
         """Indicadores visibles (Sección 14) + parámetros vigentes."""
-        # Contadores por prioridad y estado de atención
-        p_high = 0
-        p_med = 0
-        p_low = 0
-        pending = 0
-        reviewed = 0
-        costly = 0
-
-        for e in self.event_index.values():
-            if e.priority == Priority.HIGH:
-                p_high += 1
-                depth = self.avl.get_depth(e.build_key())
-                if depth is not None and depth > self.L_depth:
-                    costly += 1
-            elif e.priority == Priority.MEDIUM:
-                p_med += 1
-            else:
-                p_low += 1
-
-            if e.attention_state == AttentionState.PENDING:
-                pending += 1
-            else:
-                reviewed += 1
-
+        values = indicators_of(self)
         return {
             "counts": {
-                "active": self.avl.size,
-                "archived": len(self.archived),
-                "deleted": len(self.deleted_ids),
-                "queued_reports": self.report_queue.size(),
+                "active": values["active"],
+                "archived": values["archived"],
+                "deleted": values["deleted"],
+                "queued_reports": values["queue"],
                 "undo_depth": self.undo_stack.size(),
-                "priority_high": p_high,
-                "priority_medium": p_med,
-                "priority_low": p_low,
-                "pending": pending,
-                "reviewed": reviewed,
-                "costly_access": costly,
+                "priority_high": values["priority_high"],
+                "priority_medium": values["priority_medium"],
+                "priority_low": values["priority_low"],
+                "pending": values["pending"],
+                "reviewed": values["active"] - values["pending"],
+                "costly_access": values["costly"],
             },
+            # Every Section 14 indicator under the names the action log uses.
+            "indicators": values,
             "tree": {
                 "height": self.avl.height,
                 "leaves": self.avl.count_leaves(),
@@ -189,11 +197,12 @@ class Scenario:
                 "root": str(self.bst.root.key) if self.bst.root else None,
                 "nodes": self.bst.to_dict(),
             },
+            # Keys as [P, M, I] so the interface can show either the id or K.
             "traversals": {
-                "inorder": [str(k) for k in self.avl.inorder()],
-                "preorder": [str(k) for k in self.avl.preorder()],
-                "postorder": [str(k) for k in self.avl.postorder()],
-                "level_order": [str(k) for k in self.avl.level_order()],
+                "inorder": [k.to_list() for k in self.avl.inorder()],
+                "preorder": [k.to_list() for k in self.avl.preorder()],
+                "postorder": [k.to_list() for k in self.avl.postorder()],
+                "level_order": [k.to_list() for k in self.avl.level_order()],
             },
             "rotations": {
                 "ll": self.avl.rotations_ll,
@@ -520,8 +529,10 @@ class Scenario:
                 result = {"result": "REJECTED", "reason": str(e)}
 
         self.total_reports_processed += 1
+        reason = f" ({result['reason']})" if result.get("reason") else ""
         self._record("PROCESS_REPORT", before,
-            f"Procesar reporte {report.event_id} rev={report.revision} → {result['result']}")
+            f"Procesar reporte de {report.station_id}: evento {report.event_id} "
+            f"rev={report.revision} → {result['result']}{reason}")
         return result
 
     # --- Asociaciones ---
@@ -814,6 +825,7 @@ class Scenario:
         # The snapshot already holds the queue in its original order, so undoing
         # a queue step puts the report back even when that step discarded it.
         apply_state(self, action["before"])
+        self._log_action("UNDO", f"Deshacer: {action['description']}", current_state)
 
         return {
             "result": "UNDONE",
@@ -835,6 +847,7 @@ class Scenario:
         })
 
         apply_state(self, action["before"])
+        self._log_action("REDO", f"Rehacer: {action['description']}", current_state)
 
         return {
             "result": "REDONE",
@@ -1216,46 +1229,123 @@ class Scenario:
             "count": len(results),
         }
 
-    def query_by_interval(self, min_mag: float, max_mag: float,
-                          max_depth: Optional[float] = None,
-                          start_date: Optional[datetime] = None,
-                          end_date: Optional[datetime] = None) -> dict:
+    # Section 4 bounds the priority by the magnitude: M < 4.5 is always LOW,
+    # M >= 6.0 always HIGH, and 4.5 <= M < 6.0 is MEDIUM or HIGH (depth and
+    # zone decide). Each band: (priority, lowest M, M it must stay below, rule).
+    _MAGNITUDE_BANDS = (
+        (Priority.LOW, None, 4.5, "M < 4.5"),
+        (Priority.MEDIUM, 4.5, 6.0, "4.5 <= M < 6.0"),
+        (Priority.HIGH, 4.5, None, "M >= 4.5"),
+    )
+
+    @classmethod
+    def _magnitude_runs(cls, min_mag: float, max_mag: float) -> list[dict]:
+        """The key runs that can hold an event with min_mag <= M <= max_mag.
+
+        K = (P, M, I) orders by priority first, so those events are not one
+        contiguous run of keys but up to three, one per priority the interval
+        allows: from (P, lowest M, any id) to (P, highest M, any id). Every key
+        inside a run has M in the interval, and no matching key is outside.
         """
-        Eventos dentro de un intervalo inclusivo de magnitud [min_mag, max_mag],
-        y eventos con profundidad <= max_depth en intervalo de fechas [start_date, end_date].
-        Reporta la cantidad de nodos del AVL examinados.
+        runs = []
+        for priority, band_low, band_below, rule in cls._MAGNITUDE_BANDS:
+            low = min_mag if band_low is None else max(min_mag, band_low)
+            high = max_mag if band_below is None else min(max_mag, band_below)
+            possible = (band_low is None or max_mag >= band_low) and \
+                       (band_below is None or min_mag < band_below)
+            run = {"priority": int(priority), "name": priority.name, "rule": rule,
+                   "searched": possible}
+            if possible:
+                run["low"] = (int(priority), low, float("-inf"))
+                run["high"] = (int(priority), high, float("inf"))
+                run["text"] = f"({int(priority)}, {float(low)}, *) a ({int(priority)}, {float(high)}, *)"
+            runs.append(run)
+        return runs
+
+    def query_by_magnitude(self, min_mag: float, max_mag: float) -> dict:
+        """Active events with min_mag <= M <= max_mag (Section 11), pruned by K.
+
+        Each subtree's keys lie strictly between bounds set by its ancestors
+        (left of a node: below its key; right: above it). A subtree whose
+        bounds miss every run of _magnitude_runs cannot hold a match, so it
+        is skipped without visiting it. The walk visits the matches plus the
+        nodes on the paths to each run's two ends: O(h + r) per run, with h
+        the tree height and r the results (h is O(log n) in normal mode and
+        up to n in stress mode).
         """
+        if min_mag > max_mag:
+            raise ValueError(f"La magnitud mínima ({min_mag}) no puede ser mayor que la máxima ({max_mag})")
+        runs = [r for r in self._magnitude_runs(min_mag, max_mag) if r["searched"]]
+
+        def can_hold_match(low, high):
+            # None = unbounded on that side.
+            return any((low is None or low < r["high"]) and (high is None or r["low"] < high)
+                       for r in runs)
+
         matched = []
         nodes_examined = 0
+        pruned_subtrees = 0
+        stack = [(self.avl.root, None, None)] if self.avl.root and runs else []
+        while stack:
+            node, low, high = stack.pop()
+            nodes_examined += 1
+            if min_mag <= node.event.magnitude <= max_mag:
+                matched.append(node.event)
+            key = node.key.to_tuple()
+            for child, child_low, child_high in ((node.right, key, high), (node.left, low, key)):
+                if child is None:
+                    continue
+                if can_hold_match(child_low, child_high):
+                    stack.append((child, child_low, child_high))
+                else:
+                    pruned_subtrees += 1
 
-        # Iterative pre-order walk (explicit stack): visits every node exactly
-        # once, so a degenerate tree of any size cannot overflow the stack.
+        matched.sort(key=lambda e: e.build_key().to_tuple(), reverse=True)
+        return {
+            "results": [e.to_dict() for e in matched],
+            "count": len(matched),
+            "nodes_examined": nodes_examined,
+            "active": self.avl.size,
+            "pruned_subtrees": pruned_subtrees,
+            "runs": [{k: v for k, v in r.items() if k not in ("low", "high")}
+                     for r in self._magnitude_runs(min_mag, max_mag)],
+        }
+
+    def query_by_depth_and_dates(self, max_depth_km: float,
+                                 start: datetime, end: datetime) -> dict:
+        """Active events with H <= max_depth_km that occurred between start
+        and end, both inclusive (Section 11).
+
+        Neither the hypocenter depth nor the date is part of K, so no branch
+        can be ruled out by its position: every node is examined, O(n) even
+        in a balanced AVL. Avoiding that would need an auxiliary index by
+        date, which this project does not keep.
+        """
+        if max_depth_km < 0:
+            raise ValueError(f"La profundidad máxima no puede ser negativa, se recibió {max_depth_km}")
+        if start > end:
+            raise ValueError("La fecha inicial no puede ser posterior a la final")
+
+        matched = []
+        nodes_examined = 0
         stack = [self.avl.root] if self.avl.root else []
         while stack:
             node = stack.pop()
             nodes_examined += 1
-            e = node.event
-            if e:
-                mag_ok = (min_mag <= e.magnitude <= max_mag)
-                depth_ok = (max_depth is None or e.depth_km <= max_depth)
-                date_ok = True
-                if start_date and e.occurrence_time < start_date:
-                    date_ok = False
-                if end_date and e.occurrence_time > end_date:
-                    date_ok = False
-
-                if mag_ok and depth_ok and date_ok:
-                    matched.append(e.to_dict())
-
+            event = node.event
+            if event.depth_km <= max_depth_km and start <= event.occurrence_time <= end:
+                matched.append(event)
             if node.right:
                 stack.append(node.right)
             if node.left:
                 stack.append(node.left)
 
+        matched.sort(key=lambda e: (e.occurrence_time, e.event_id))
         return {
-            "results": matched,
-            "nodes_examined": nodes_examined,
+            "results": [e.to_dict() for e in matched],
             "count": len(matched),
+            "nodes_examined": nodes_examined,
+            "active": self.avl.size,
         }
 
     def query_event_associations(self, event_id: int) -> dict:
@@ -1309,40 +1399,61 @@ class Scenario:
                     "status": rep_status,
                 })
 
+        # The AVL is not used here: the event comes from the id indexes, and
+        # candidates and replicas come from two passes over the active and
+        # archived events (the AVL does not hold the archived ones).
         return {
             "event_id": event_id,
             "status": status_str,
             "reference": ref_info,
             "candidates": candidates_info,
             "replicas": replicas,
-            "nodes_examined": len(self.event_index) + len(self.archived),
+            "nodes_examined": 0,
+            "events_scanned": 2 * (len(self.event_index) + len(self.archived)),
         }
 
     def query_costly_high_priority(self) -> dict:
-        """
-        Eventos de prioridad alta (P=3) con acceso costoso (profundidad > L).
-        Indica profundidad del nodo, límite L y número de nodos visitados en su búsqueda por clave.
+        """High-priority events whose node depth exceeds L (Sections 9 and 11).
+
+        HIGH is the largest P, so every HIGH key is greater than every other
+        key. The left subtree of a node with lower priority only has smaller
+        keys, hence no HIGH event: it is skipped. The walk carries each
+        node's depth, and a key search visits exactly the path from the root
+        to the node, so its cost is depth + 1 nodes.
         """
         results = []
-        for e in self.event_index.values():
-            if e.priority == Priority.HIGH:
-                key = e.build_key()
-                node, visited = self.avl.search(key)
-                depth = visited - 1 if node else None
-                if depth is not None and depth > self.L_depth:
-                    results.append({
-                        "event_id": e.event_id,
-                        "key": str(key),
-                        "depth": depth,
-                        "limit_L": self.L_depth,
-                        "nodes_visited": visited,
-                        "event": e.to_dict(),
-                    })
+        nodes_examined = 0
+        pruned_subtrees = 0
+        stack = [(self.avl.root, 0)] if self.avl.root else []
+        while stack:
+            node, depth = stack.pop()
+            nodes_examined += 1
+            event = node.event
+            if event.priority == Priority.HIGH and depth > self.L_depth:
+                results.append({
+                    "event_id": event.event_id,
+                    "key": str(node.key),
+                    "depth": depth,
+                    "limit_L": self.L_depth,
+                    "nodes_visited": depth + 1,
+                    "event": event.to_dict(),
+                })
+            if node.right:
+                stack.append((node.right, depth + 1))
+            if node.left:
+                if node.key.priority == Priority.HIGH:
+                    stack.append((node.left, depth + 1))
+                else:
+                    pruned_subtrees += 1
 
+        results.sort(key=lambda r: (-r["depth"], r["event_id"]))
         return {
             "limit_L": self.L_depth,
             "costly_events": results,
             "count": len(results),
+            "nodes_examined": nodes_examined,
+            "active": self.avl.size,
+            "pruned_subtrees": pruned_subtrees,
         }
 
     def compare_current_trees(self) -> dict:

@@ -396,7 +396,7 @@ def test_queries_section_11():
     assert top["nodes_examined"] >= 2
     assert top["results"][0]["magnitude"] >= top["results"][1]["magnitude"]
 
-    interval_res = sc.query_by_interval(min_mag=6.0, max_mag=8.0)
+    interval_res = sc.query_by_magnitude(min_mag=6.0, max_mag=8.0)
     assert len(interval_res["results"]) == 2
     assert interval_res["nodes_examined"] == 3
 
