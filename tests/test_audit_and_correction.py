@@ -223,7 +223,7 @@ class TreeAndAuditUiTest(unittest.TestCase):
                 json.dump(data, handle)
             result = subprocess.run(
                 [node, os.path.join(ROOT, "tests", "js", "tree_audit_ui.js"),
-                 os.path.join(ROOT, "web", "app.js"), path],
+                 os.path.join(ROOT, "web", "js"), path],
                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

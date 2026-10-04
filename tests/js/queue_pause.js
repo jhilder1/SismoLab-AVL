@@ -68,7 +68,18 @@ const context = {
 context.window = context;
 context.window.addEventListener = () => {};
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(appPath, "utf8"), context);
+let src = "";
+try {
+    if (fs.statSync(appPath).isDirectory()) {
+        const files = ["globals.js", "ui.js", "tabs.js", "treeRenderer.js", "mapRenderer.js", "actions.js", "queue.js", "queries.js", "indicators.js", "parameters.js", "file.js", "main.js"];
+        for (const file of files) src += fs.readFileSync(appPath + "/" + file, "utf8") + "\n";
+    } else {
+        src = fs.readFileSync(appPath, "utf8");
+    }
+} catch (e) {
+    src = fs.readFileSync(appPath, "utf8");
+}
+vm.runInContext(src, context);
 
 (async () => {
     vm.runInContext("refresh()", context);

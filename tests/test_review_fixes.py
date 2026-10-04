@@ -388,7 +388,7 @@ class QueuePauseUiTest(unittest.TestCase):
             self.skipTest("Node.js is not installed")
         result = subprocess.run(
             [node, os.path.join(ROOT, "tests", "js", "queue_pause.js"),
-             os.path.join(ROOT, "web", "app.js")],
+             os.path.join(ROOT, "web", "js")],
             capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
