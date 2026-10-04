@@ -1,7 +1,7 @@
-// Loads web/app.js with a fake DOM and a fake eel that replays real backend
+// Loads the web/js scripts with a fake DOM and a fake eel that replays real backend
 // answers (written by tests/test_queries_indicators.py) and checks what the
 // Indicadores tab, the Section 11 queries and the burst loader put on screen.
-// Usage: node tests/js/indicators_ui.js web/app.js <data.json>   (exit code 0 = passed)
+// Usage: node tests/js/indicators_ui.js web/js <data.json>   (exit code 0 = passed)
 const fs = require("fs");
 const path = require("path");
 const { loadApp, checker, sleep } = require(path.join(__dirname, "fake_env.js"));

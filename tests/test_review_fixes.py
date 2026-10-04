@@ -374,9 +374,9 @@ class LookupDetailsTest(unittest.TestCase):
 
 
 class QueuePauseUiTest(unittest.TestCase):
-    """Defect 8: web/app.js pauses continuous processing during a recovery.
+    """Defect 8: web/js pauses continuous processing during a recovery.
 
-    Runs tests/js/queue_pause.js, which loads app.js with a fake DOM and a
+    Runs tests/js/queue_pause.js, which loads the web/js scripts with a fake DOM and a
     fake eel. Skipped when Node.js is not installed.
     """
 

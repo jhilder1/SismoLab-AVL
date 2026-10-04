@@ -205,7 +205,7 @@ class ClockEndpointTest(unittest.TestCase):
 
 
 class TreeAndAuditUiTest(unittest.TestCase):
-    """web/app.js: node tooltips, the Auditoria tab, the correction form and the
+    """web/js: node tooltips, the Auditoria tab, the correction form and the
     clock field, with real answers. Runs tests/js/tree_audit_ui.js; skipped
     without Node.js."""
 

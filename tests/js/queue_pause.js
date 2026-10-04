@@ -1,7 +1,7 @@
-// Loads web/app.js with a fake DOM and a fake eel to check Section 8:
+// Loads the web/js scripts with a fake DOM and a fake eel to check Section 8:
 // a global recovery requested during continuous processing waits for the
 // step in progress, runs while no step can start, and leaves the queue paused.
-// Usage: node tests/js/queue_pause.js web/app.js   (exit code 0 = passed)
+// Usage: node tests/js/queue_pause.js web/js   (exit code 0 = passed)
 // Run from Python by tests/test_review_fixes.py (skipped when Node is missing).
 const fs = require("fs");
 const vm = require("vm");
@@ -55,7 +55,10 @@ const eel = {
     recover_balance: () => async () => {
         calls.push("recover");
         return { result: "RECOVERED", message: "ok",
-                 cost: { ll: 1, rr: 0, lr: 0, rl: 0, final_height: 2 } };
+                 cost: { ll: 1, rr: 0, lr: 0, rl: 0, simple_turns_left: 0, simple_turns_right: 1,
+                         height_before: 2, final_height: 1,
+                         unbalanced_before: [{ event_id: 3, balance_factor: 2 }],
+                         steps: [{ case: "LL", node: 3, balance_factor: 2, new_root: 2 }] } };
     },
 };
 

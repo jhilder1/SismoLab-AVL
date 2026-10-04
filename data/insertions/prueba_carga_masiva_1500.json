@@ -54,12 +54,6 @@
       "name": "Estacion Costa"
     }
   ],
-  "parameters": {
-    "W_hours": 48.0,
-    "R_km": 40.0,
-    "L_depth": 3,
-    "T_archive_hours": 72.0
-  },
   "events": [
     {
       "event_id": 10001,

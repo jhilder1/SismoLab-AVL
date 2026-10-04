@@ -250,6 +250,9 @@ class CatalogMixin:
 
     def mark_reviewed(self, event_id: int) -> SeismicEvent:
         event = self._require_active(event_id)
+        # Nothing would change, so no action is recorded (an empty undo step).
+        if event.attention_state == AttentionState.REVIEWED:
+            raise ValueError(f"El evento {event.format_id()} ya está marcado como revisado")
         before = self.snapshot()
         event.attention_state = AttentionState.REVIEWED
         self._record("REVIEW", before,

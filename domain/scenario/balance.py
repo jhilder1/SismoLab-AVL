@@ -59,8 +59,9 @@ class BalanceMixin:
             }
 
         self._record("TOGGLE_STRESS", before,
-                     f"Salir de modo estrés: recuperación global, altura final {cost['final_height']}")
-        return {"stress_mode": False, "message": "Modo normal: la auditoría confirma el equilibrio",
+                     f"Salir de modo estrés: recuperación global, {_cost_text(cost)}")
+        return {"stress_mode": False,
+                "message": f"Modo normal: la auditoría confirma el equilibrio ({_cost_text(cost)})",
                 "cost": cost}
 
     def recover_balance(self) -> dict:
@@ -86,7 +87,16 @@ class BalanceMixin:
             return {"result": "ALREADY_BALANCED", "message": message,
                     "cost": cost, "stress_mode": self.avl.stress_mode}
 
-        message = f"Recuperación global aplicada: altura final {cost['final_height']}"
+        message = f"Recuperación global aplicada: {_cost_text(cost)}"
         self._record("RECOVER", before, message)
         return {"result": "RECOVERED", "message": message,
                 "cost": cost, "stress_mode": self.avl.stress_mode}
+
+
+def _cost_text(cost: dict) -> str:
+    """One line with what a recovery found and changed (Section 8)."""
+    cases = sum(cost[k] for k in ("ll", "rr", "lr", "rl"))
+    turns = cost["simple_turns_left"] + cost["simple_turns_right"]
+    return (f"{len(cost['unbalanced_before'])} nodo(s) desbalanceado(s) detectado(s), "
+            f"altura {cost['height_before']} -> {cost['final_height']}, "
+            f"{cases} caso(s) de rotación con {turns} giro(s) elemental(es)")

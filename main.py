@@ -8,7 +8,6 @@ A window opens with the graphical interface. Every function exposed with
 
 import os
 import eel
-from datetime import datetime
 from domain.scenario import Scenario
 from domain.models import Epicenter, Report, Zone, Station, parse_time
 from domain.storage import StateError
@@ -57,7 +56,8 @@ def create_event(event_id, magnitude, depth_km, epicenter_x, epicenter_y,
                  occurrence_time_str, station_id):
     """Creates a new seismic event."""
     try:
-        occ = datetime.fromisoformat(occurrence_time_str)
+        # parse_time: ISO 8601 with or without 'Z', read as UTC, second precision (Section 3).
+        occ = parse_time(occurrence_time_str)
         event = sc.create_event(
             event_id=int(event_id),
             magnitude=float(magnitude),
@@ -142,7 +142,7 @@ def enqueue_report(event_id, revision, station_id, magnitude, depth_km,
             magnitude=float(magnitude),
             depth_km=float(depth_km),
             epicenter=Epicenter(float(epicenter_x), float(epicenter_y)),
-            occurrence_time=datetime.fromisoformat(occurrence_time_str),
+            occurrence_time=parse_time(occurrence_time_str),
         )
         sc.enqueue_report(report)
         return {"ok": True, "message": f"Reporte encolado (evento {event_id}, rev {revision})"}

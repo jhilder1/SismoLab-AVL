@@ -44,7 +44,7 @@ def generate_massive():
         "clock": "2026-07-01T23:59:00Z",
         "zones": ZONES,
         "stations": STATIONS,
-        "parameters": {"W_hours": 48.0, "R_km": 40.0, "L_depth": 3, "T_archive_hours": 72.0},
+        # No "parameters": the load keeps the W, R, L and T set before it (Section 9).
         "events": events,
     }
     

@@ -23,7 +23,7 @@ Se abre una ventana con la interfaz. Cerrar la ventana detiene el programa.
 
 ## Pruebas
 
-Todas las pruebas, solo con Python (186 pruebas):
+Todas las pruebas, solo con Python (195 pruebas):
 
 ```
 python -m unittest discover -s tests
@@ -53,6 +53,7 @@ La evidencia de la sección 16 (resultados esperados y obtenidos) se imprime con
 | `tests/test_queries_indicators.py` | Consultas de la sección 11 (poda por K, profundidad y fechas, acceso costoso) contra un recorrido completo, e indicadores y registro de acciones de la sección 14 |
 | `tests/test_audit_and_correction.py` | Reporte por evento inconsistente de Verificar estructura (sección 14), corrección de epicentro y fecha (sección 6), reloj por horas (sección 3) y tooltips del árbol (sección 15) |
 | `tests/test_audit_associations.py` | `run_audit` detecta una referencia que existe pero viola magnitud/tiempo/W/R, y ciclos en la cadena de referencias (sección 14 sobre sección 7) |
+| `tests/test_spec_review.py` | Revisión contra el enunciado: fechas ISO con `Z` desde la interfaz (sección 3), no marcar dos veces como revisado (sección 6), reporte de la recuperación con desbalances detectados, rotaciones y altura antes/después (sección 8) y L configurado antes de cargar (sección 9) |
 
 ## Arquitectura
 
@@ -62,20 +63,53 @@ La interfaz nunca toca un nodo: pide la operación a `Scenario` y dibuja el resu
 ```
 main.py                 Puente Eel: cada botón llama una función @eel.expose;
                         explorador de archivos (tkinter)
-web/                    Interfaz HTML + JS + SVG (árbol AVL y BST comparativo)
+web/
+  index.html, style.css Interfaz (árbol AVL, BST comparativo, plano, pestañas)
+  js/globals.js         Estado compartido, refresh() y cálculo de acceso costoso
+  js/ui.js              Barra de indicadores, lista de eventos e histórico
+  js/tabs.js            Cambio de pestaña y qué se dibuja en cada una
+  js/treeRenderer.js    Dibujo SVG del AVL y del BST con tooltips de clave y enlaces
+  js/mapRenderer.js     Plano geográfico 0-1000 km con zonas y eventos
+  js/actions.js         Crear, corregir, eliminar, buscar y encolar reportes
+  js/queue.js           Cola FIFO, procesamiento continuo, estrés, recuperación,
+                        auditoría, reloj y archivo de ramas
+  js/queries.js         Consultas de la sección 11 y comparativa AVL/BST
+  js/indicators.js      Indicadores, recorridos y registro de acciones (sección 14)
+  js/parameters.js      Parámetros W, R, L y T
+  js/file.js            Guardar/cargar archivos y versiones con nombre
+  js/main.js            Arranque y zoom/desplazamiento de los SVG
 domain/
   models.py             Evento, reporte, zona, estación, epicentro, asociación;
                         cálculo de prioridad y formato de fechas ISO 8601 (Z)
-  scenario.py           Estado completo y un método por acción; pila de deshacer
+  scenario/             Clase Scenario: estado completo y un módulo por grupo
+                        de operaciones (mixins)
+    scenario.py         Declara el estado (AVL, BST, índices, cola, pila, parámetros)
+    catalog.py          Crear, corregir, eliminar, marcar revisado, consultar por ID
+    reports.py          Cola de reportes y sus cuatro casos (sección 6 y 8)
+    associations.py     Referencia de cada evento (sección 7)
+    archive.py          Ramas elegibles, vista previa y archivo (sección 10)
+    balance.py          Modo estrés y recuperación global (sección 8)
+    audit.py            Verificar estructura (sección 14)
+    queries.py          Consultas y análisis de desempeño (sección 11)
+    settings.py         Reloj y parámetros W, R, L, T
+    persistence.py      Archivos y versiones con nombre (secciones 12 y 13)
+    history.py          Fotos del estado, deshacer/rehacer y registro de acciones
+    summary.py          Estado que dibuja la interfaz
   storage.py            Estado <-> JSON con topología exacta (todo o nada)
   loader.py             Carga por topología y por inserciones (sección 12) y
                         ráfagas de reportes para la cola (sección 8)
   validation.py         Validaciones de datos, orden global por K, alturas y balance
+  indicators.py         Indicadores de la sección 14 (vivos y desde una foto)
   versions.py           Versiones con nombre en data/versions/ (sección 13)
 core/
-  avl_tree.py           TreeKey, AVLTree (rotaciones, modo estrés, recuperación), BSTTree
+  tree_key.py           TreeKey: la clave K = (P, M, I) y su comparación
+  binary_tree.py        Búsqueda, recorridos iterativos y serialización comunes
+  avl_tree.py           AVLTree: rotaciones, modo estrés y recuperación global
+  bst_tree.py           BSTTree sin balanceo (comparación)
+  tree_compare.py       Inserta la misma secuencia en un AVL y un BST y los compara
   linear.py             Pila de deshacer y cola FIFO de reportes
 tools/make_data.py      Regenera los archivos de prueba de data/
+tools/generate_massive_data.py  Genera el archivo de 1500 eventos (aleatorio)
 tools/section16_report.py  Evidencia de la sección 16: resultados esperados y obtenidos
 ```
 

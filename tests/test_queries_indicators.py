@@ -317,7 +317,7 @@ class ActionLogTest(unittest.TestCase):
 
 
 class IndicatorsUiTest(unittest.TestCase):
-    """web/app.js renders the Indicadores tab, the queries and the burst loader
+    """web/js renders the Indicadores tab, the queries and the burst loader
     from real answers.
 
     Runs tests/js/indicators_ui.js with the answers main.py would send for

@@ -3,7 +3,7 @@
 // =====================================================
 
 // Spanish label, colour family and a short generic reason for each decision
-// process_next_report can return (domain/scenario.py:295 onward). The family
+// process_next_report can return (domain/scenario/reports.py). The family
 // picks the CSS class: create/correct the catalogue, only confirm, or reject.
 const REPORT_DECISIONS = {
     CREATED:            { label: "Creado",                family: "create",  why: "Identificador desconocido: se registra como evento nuevo" },
@@ -258,15 +258,32 @@ async function recoverBalance() {
     const { res, paused } = await runWithQueuePaused(() => eel.recover_balance()());
     const pauseText = paused ? "\n\n" + RESUME_HINT : "";
     if (res.result === "RECOVERED") {
-        const c = res.cost;
-        const msg = `Balance recuperado.\n\nRotaciones realizadas:\nLL=${c.ll}  RR=${c.rr}  LR=${c.lr}  RL=${c.rl}\nAltura final del árbol=${c.final_height}` + pauseText;
-        log(msg.replace(/\n/g, ' '), "ok");
+        const msg = "Balance recuperado.\n\n" + recoveryReportText(res.cost) + pauseText;
+        log(res.message, "ok");
         alert(msg);
     } else {
         log(res.message + (paused ? " " + RESUME_HINT : ""), "info");
         alert(res.message + pauseText);
     }
     refresh();
+}
+
+// Section 8: a global recovery shows what it detected, what it changed and its cost.
+const RECOVERY_STEPS_SHOWN = 15;
+
+function recoveryReportText(c) {
+    const worst = c.unbalanced_before.reduce((m, n) => Math.max(m, Math.abs(n.balance_factor)), 0);
+    const detected = c.unbalanced_before.slice(0, RECOVERY_STEPS_SHOWN)
+        .map(n => `${formatEventId(n.event_id)} (FB ${n.balance_factor})`).join(", ");
+    const steps = c.steps.slice(0, RECOVERY_STEPS_SHOWN).map((s, i) =>
+        `${i + 1}. ${s.case} en ${formatEventId(s.node)} (FB ${s.balance_factor}): sube ${formatEventId(s.new_root)}`);
+    const more = list => list.length > RECOVERY_STEPS_SHOWN ? `\n… y ${list.length - RECOVERY_STEPS_SHOWN} mas` : "";
+    return `Desbalances detectados: ${c.unbalanced_before.length} nodo(s), mayor |FB| = ${worst}\n`
+        + `${detected}${more(c.unbalanced_before)}\n\n`
+        + `Rotaciones aplicadas (${c.steps.length} caso(s)):\n${steps.join("\n")}${more(c.steps)}\n\n`
+        + `Costo: LL=${c.ll}  RR=${c.rr}  LR=${c.lr}  RL=${c.rl} | `
+        + `giros elementales izq=${c.simple_turns_left} der=${c.simple_turns_right}\n`
+        + `Altura del arbol: ${c.height_before} -> ${c.final_height}`;
 }
 
 // Section 14: "Verificar estructura" opens the Auditoria tab, which shows one

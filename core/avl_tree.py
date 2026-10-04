@@ -77,6 +77,9 @@ class AVLTree(BinaryTree):
         self.simple_turns_left = 0
         self.simple_turns_right = 0
 
+        # When a list, _balance appends one entry per case it fixes (recovery report).
+        self._rotation_log: Optional[list] = None
+
     def get_height(self, node: Optional[AVLNode]) -> int:
         return node.height if node else -1
 
@@ -148,20 +151,28 @@ class AVLTree(BinaryTree):
         if balance > 1:
             if self.get_balance(node.left) >= 0:
                 self.rotations_ll += 1
-                return self._rotate_right(node)
+                return self._logged("LL", node, balance, self._rotate_right(node))
             self.rotations_lr += 1
             node.left = self._rotate_left(node.left)
-            return self._rotate_right(node)
+            return self._logged("LR", node, balance, self._rotate_right(node))
 
         if balance < -1:
             if self.get_balance(node.right) <= 0:
                 self.rotations_rr += 1
-                return self._rotate_left(node)
+                return self._logged("RR", node, balance, self._rotate_left(node))
             self.rotations_rl += 1
             node.right = self._rotate_right(node.right)
-            return self._rotate_left(node)
+            return self._logged("RL", node, balance, self._rotate_left(node))
 
         return node
+
+    def _logged(self, case: str, node: AVLNode, balance: int, new_root: AVLNode) -> AVLNode:
+        """Record one fixed case (only while a recovery report is being collected)."""
+        if self._rotation_log is not None:
+            self._rotation_log.append({"case": case, "node": node.event_id,
+                                       "balance_factor": balance,
+                                       "new_root": new_root.event_id})
+        return new_root
 
     def _rotate_right(self, y: AVLNode) -> AVLNode:
         self.simple_turns_right += 1
@@ -249,11 +260,24 @@ class AVLTree(BinaryTree):
             "lr": self.rotations_lr, "rl": self.rotations_rl,
             "left": self.simple_turns_left, "right": self.simple_turns_right,
         }
+        # What the recovery detects first: heights are kept up to date in
+        # stress mode too, so each stored balance factor is the real one.
+        height_before = self.height
+        unbalanced_before = [{"event_id": n.event_id, "balance_factor": n.balance_factor}
+                             for n in iter_preorder(self.root) if abs(n.balance_factor) > 1]
 
-        self._recover_balance_iterative()
+        self._rotation_log = []
+        try:
+            self._recover_balance_iterative()
+            steps = self._rotation_log
+        finally:
+            self._rotation_log = None
         self.stress_mode = False
 
         return {
+            "height_before": height_before,
+            "unbalanced_before": unbalanced_before,
+            "steps": steps,
             "ll": self.rotations_ll - before["ll"],
             "rr": self.rotations_rr - before["rr"],
             "lr": self.rotations_lr - before["lr"],

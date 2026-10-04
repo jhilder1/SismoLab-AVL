@@ -50,18 +50,22 @@ function updateEvents(events) {
     list.innerHTML = events.map(e => {
         const pClass = "p" + e.priority;
         const pName = ["", "LOW", "MED", "HIGH"][e.priority];
+        // Only a pending event can be marked; a correction makes it pending again (Section 6).
+        const action = e.attention_state === "pending"
+            ? `<button class="btn btn-sm" onclick="window.markReviewed(${e.event_id})" style="margin-top: 5px; width: 100%;">Marcar Revisado</button>`
+            : `<div class="ev-detail" style="margin-top: 5px;">Revisado</div>`;
         return `<div class="event-card ${pClass}">
             <div class="ev-id">SIS-${String(e.event_id).padStart(6, "0")}</div>
             <div class="ev-detail">M=${e.magnitude} | P=${pName} | Prof=${e.depth_km}km | Rev=${e.revision}</div>
             <div class="ev-detail">Epi=(${e.epicenter.x}, ${e.epicenter.y}) | ${e.attention_state}</div>
-            <button class="btn btn-sm" onclick="window.markReviewed(${e.event_id})" style="margin-top: 5px; width: 100%;">Marcar Revisado</button>
+            ${action}
         </div>`;
     }).join("");
 }
 
 window.markReviewed = async function(id) {
     const res = await eel.mark_reviewed(id)();
-    log(res.message, res.ok ? "info" : "error");
+    log(res.message, res.ok ? "ok" : "err");
     if (res.ok) refresh();
 };
 

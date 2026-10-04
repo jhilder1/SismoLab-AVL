@@ -1,4 +1,4 @@
-// A fake browser to run web/app.js under Node: getElementById returns plain
+// A fake browser to run the web/js scripts under Node: getElementById returns plain
 // objects that remember textContent, innerHTML, value, style and classes.
 // `eel` is a fake of the Python endpoints, built by each test script.
 const fs = require("fs");

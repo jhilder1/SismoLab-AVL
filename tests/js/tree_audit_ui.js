@@ -1,8 +1,8 @@
-// Runs web/app.js with real backend answers (written by
+// Runs the web/js scripts with real backend answers (written by
 // tests/test_audit_and_correction.py) and checks the node tooltips of the
 // tree (Section 15), the Auditoria tab (Section 14), the full correction form
 // (Section 6) and the clock advanced by N hours (Section 3).
-// Usage: node tests/js/tree_audit_ui.js web/app.js <data.json>   (exit code 0 = passed)
+// Usage: node tests/js/tree_audit_ui.js web/js <data.json>   (exit code 0 = passed)
 const fs = require("fs");
 const path = require("path");
 const { loadApp, checker, sleep } = require(path.join(__dirname, "fake_env.js"));

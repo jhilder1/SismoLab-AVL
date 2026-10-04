@@ -188,13 +188,14 @@ def main(out_dir=DATA_DIR, verbose=True):
     ]
     demo_clock = "2026-06-30T23:59:00Z"
     demo_params = {"W_hours": 48.0, "R_km": 40.0, "L_depth": 3, "T_archive_hours": 72.0}
+    # No "parameters": an insertion load keeps the W, R, L and T the user set
+    # before loading (Section 9: L is configured "antes de cargar los datos").
     put(INSERTIONS, "prueba_carga_inserciones.json", {
         "format": FORMAT_INSERTIONS,
         "description": "20 eventos de prueba con variedad de magnitudes, prioridades y zonas",
         "clock": demo_clock,
         "zones": ZONES,
         "stations": STATIONS,
-        "parameters": demo_params,
         "events": demo_events,
     })
     # Topology: same 20 events loaded through the live AVL, then snapshot.
