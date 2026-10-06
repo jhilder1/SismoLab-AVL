@@ -161,8 +161,8 @@ h1 .accent {
 .panel-right {
     border-right: none;
     border-left: 1px solid var(--border);
-    width: 280px;
-    min-width: 240px;
+    width: 250px;
+    min-width: 230px;
 }
 
 .panel h3 {
@@ -283,7 +283,7 @@ input[type="datetime-local"] { font-size: 0.75rem; }
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 20px;
+    padding: 10px;
     position: relative;
 }
 

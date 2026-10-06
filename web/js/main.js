@@ -25,6 +25,7 @@ function addZoomPan(svg) {
     if (!svg || svg._zoomPanAdded) return;
     svg._zoomPanAdded = true;
     svg.style.cursor = "grab";
+    const initialViewBox = svg.getAttribute("viewBox");
 
     let isPanning = false;
     let startPoint = { x: 0, y: 0 };
@@ -64,6 +65,12 @@ function addZoomPan(svg) {
         isPanning = false;
         svg.style.cursor = "grab";
         svg.releasePointerCapture(e.pointerId);
+    });
+
+    // Double click: back to the starting view (the whole tree).
+    svg.addEventListener("dblclick", () => {
+        const home = svg._homeViewBox || initialViewBox;
+        if (home) svg.setAttribute("viewBox", home);
     });
 
     svg.addEventListener("wheel", e => {

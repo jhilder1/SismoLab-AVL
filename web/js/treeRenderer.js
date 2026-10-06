@@ -32,7 +32,7 @@ function generateTreeSvgHtml(treeData, treeViewType) {
         return { x, y };
     }
 
-    layout(treeData.nodes, 0, null);
+    const rootPos = layout(treeData.nodes, 0, null);
 
     const svgW = maxX - minX + NODE_R * 4;
     const svgH = maxY + NODE_R * 2 + 10;
@@ -77,7 +77,7 @@ function generateTreeSvgHtml(treeData, treeViewType) {
         }
         html += `</g>`;
     }
-    return { empty: false, svgW, svgH, html };
+    return { empty: false, svgW, svgH, rootX: rootPos.x + offsetX, html };
 }
 
 // Section 15: hovering a node shows its whole key and its links, besides the
@@ -111,10 +111,42 @@ function updateTree(treeData) {
 
     emptyMsg.style.display = "none";
     svg.style.display = "block";
-    svg.setAttribute("width", res.svgW);
-    svg.setAttribute("height", res.svgH);
-    svg.setAttribute("viewBox", `0 0 ${res.svgW} ${res.svgH}`);
+
+    // The drawing area is the whole visible panel, so zooming and panning
+    // never get clipped by a box the size of a small tree. The starting view
+    // shows the whole tree when it fits (never enlarged, centred, top
+    // aligned). A tree too big to fit at MIN_SCALE starts at that scale,
+    // at the top and centred on its root; dragging moves along it.
+    const box = $("tree-container");
+    const viewW = Math.max(200, (box.clientWidth || 0) - 2 * CONTAINER_PAD - 2);
+    const viewH = Math.max(200, (box.clientHeight || 0) - 2 * CONTAINER_PAD - 2);
+    const fit = Math.min(viewW / res.svgW, viewH / res.svgH);
+    const scale = Math.min(1, Math.max(fit, MIN_SCALE));
+    const vbW = viewW / scale;
+    const vbH = viewH / scale;
+    const x = vbW >= res.svgW
+        ? (res.svgW - vbW) / 2
+        : Math.min(Math.max(res.rootX - vbW / 2, 0), res.svgW - vbW);
+    const home = `${x} 0 ${vbW} ${vbH}`;
+
+    svg.setAttribute("width", viewW);
+    svg.setAttribute("height", viewH);
+    svg.setAttribute("viewBox", home);
+    svg._homeViewBox = home;    // double click goes back here (addZoomPan)
     svg.innerHTML = res.html;
     addZoomPan(svg);
 }
+
+const CONTAINER_PAD = 10;   // .tree-container padding in style.css
+const MIN_SCALE = 0.35;     // smallest starting zoom: nodes still tell apart
+
+// Keep the drawing area matched to the panel when the window is resized.
+let resizeFrame = null;
+window.addEventListener("resize", () => {
+    if (resizeFrame) return;
+    resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        if (treeView === "avl" || treeView === "bst") drawCurrentTree();
+    });
+});
 

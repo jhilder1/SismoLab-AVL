@@ -75,7 +75,8 @@ function drawCurrentTree() {
     }
     const data = treeView === "bst" ? lastState.bst : lastState.tree;
     const label = treeView === "bst" ? "BST" : "AVL";
-    updateTree(data);
+    // Header first: its height decides the space left for the drawing.
     $("tree-root").textContent = `${label} | Raiz: ${data.root || "--"} | Altura: ${data.height} | Hojas: ${data.leaves}`;
+    updateTree(data);
 }
 
