@@ -77,13 +77,31 @@ function renderArchived(archived) {
     }
     // Descending id order
     archived.sort((a, b) => b.event_id - a.event_id);
-    list.innerHTML = archived.map(e => {
+    
+    let html = `<button class="btn btn-primary full-w" style="margin-bottom: 10px;" onclick="window.unarchiveAll()">Restaurar todos los eventos</button>`;
+    
+    html += archived.map(e => {
         const pClass = "p" + e.priority;
         const pName = ["", "LOW", "MED", "HIGH"][e.priority];
         return `<div class="event-card ${pClass}">
             <div class="ev-id">SIS-${String(e.event_id).padStart(6, "0")} (Archivado)</div>
             <div class="ev-detail">M=${e.magnitude} | P=${pName} | Prof=${e.depth_km}km</div>
+            <button class="btn btn-sm" onclick="window.unarchiveEvent(${e.event_id})" style="margin-top: 5px; width: 100%;">Restaurar a activo</button>
         </div>`;
     }).join("");
+    
+    list.innerHTML = html;
 }
+
+window.unarchiveEvent = async function(id) {
+    const res = await eel.unarchive_event(id)();
+    log(res.message, res.ok ? "ok" : "err");
+    if (res.ok) refresh();
+};
+
+window.unarchiveAll = async function() {
+    const res = await eel.unarchive_all()();
+    log(res.message, res.ok ? "ok" : "err");
+    if (res.ok) refresh();
+};
 

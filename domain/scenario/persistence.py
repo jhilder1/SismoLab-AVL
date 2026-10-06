@@ -26,16 +26,27 @@ class PersistenceMixin:
     def load_scenario_file(self, path: str) -> dict:
         """Topology load. Raises StateError with every problem and keeps the state."""
         state, info = load_topology(self, read_json_file(path))
-        self._replace_state(state, "LOAD_TOPOLOGY",
-                            f"Cargar escenario {os.path.basename(path)}")
+        from domain.storage import apply_state
+        from core.linear import UndoStack
+        apply_state(self, state)
+        self.action_log = []
+        self.actions_logged = 0
+        self.undo_stack = UndoStack()
+        self.redo_stack = UndoStack()
+        self._log_action("LOAD_TOPOLOGY", f"Cargar escenario {os.path.basename(path)}", self.snapshot())
         return info
 
     def load_insertions_file(self, path: str) -> dict:
         """Insertion load into a balanced AVL and a plain BST; returns their comparison."""
         state, comparison = load_insertions(self, read_json_file(path))
-        self._replace_state(state, "LOAD_INSERTIONS",
-                            f"Cargar {comparison['events']} eventos por inserción "
-                            f"desde {os.path.basename(path)}")
+        from domain.storage import apply_state
+        from core.linear import UndoStack
+        apply_state(self, state)
+        self.action_log = []
+        self.actions_logged = 0
+        self.undo_stack = UndoStack()
+        self.redo_stack = UndoStack()
+        self._log_action("LOAD_INSERTIONS", f"Cargar {comparison['events']} eventos por inserción desde {os.path.basename(path)}", self.snapshot())
         return comparison
 
     def load_burst_file(self, path: str) -> dict:

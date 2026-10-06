@@ -6,6 +6,9 @@ A window opens with the graphical interface. Every function exposed with
 @eel.expose is called directly from JavaScript: eel.function_name(args)
 """
 
+import sys
+sys.setrecursionlimit(10000)
+
 import os
 import eel
 from domain.scenario import Scenario
@@ -236,6 +239,26 @@ def archive_selected_branch(event_ids):
 
 
 @eel.expose
+def unarchive_event(event_id):
+    """Restores a single archived event."""
+    try:
+        event = sc.unarchive_event(int(event_id))
+        return {"ok": True, "message": f"Evento {event.format_id()} restaurado del historial"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
+def unarchive_all():
+    """Restores all archived events."""
+    try:
+        count = sc.unarchive_all()
+        return {"ok": True, "message": f"{count} eventos restaurados del historial"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@eel.expose
 def query_top_k_pending(k=5):
     """Returns the first k pending events in descending order of K."""
     try:
@@ -433,10 +456,12 @@ if __name__ == "__main__":
     # server and print the URL to open by hand.
     for mode in ("chrome", "edge", "default"):
         try:
-            eel.start("index.html", size=(1400, 850), port=PORT, mode=mode)
+            eel.start("index.html", size=(1400, 850), port=PORT, mode=mode,
+                      close_callback=lambda page, sockets: None)
             break
         except (OSError, EnvironmentError, RuntimeError):
             continue
     else:
         print(f"No se detecto navegador. Abre http://localhost:{PORT} manualmente.")
-        eel.start("index.html", port=PORT, mode=None)
+        eel.start("index.html", port=PORT, mode=None,
+                  close_callback=lambda page, sockets: None)

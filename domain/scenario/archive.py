@@ -241,3 +241,34 @@ class ArchiveMixin:
         root = f" (raíz {root_id})" if root_id is not None else ""
         self._record("ARCHIVE", before, f"Archivar {count} eventos{root}: {list(event_ids)}")
         return count
+
+    def unarchive_event(self, event_id: int) -> SeismicEvent:
+        """Restores a single archived event back to the active tree."""
+        event = self.archived.get(event_id)
+        if not event:
+            raise ValueError(f"El evento {event_id} no está archivado")
+        before = self.snapshot()
+        del self.archived[event_id]
+        event.status = EventStatus.ACTIVE
+        self._index_active(event)
+        self.total_archive_operations += 1
+        self.recalculate_all_associations()
+        self._record("UNARCHIVE", before, f"Restaurar evento archivado: {event_id}")
+        return event
+
+    def unarchive_all(self) -> int:
+        """Restores all archived events back to the active tree."""
+        if not self.archived:
+            raise ValueError("No hay eventos archivados para restaurar")
+        before = self.snapshot()
+        count = 0
+        ids = list(self.archived.keys())
+        for event_id in ids:
+            event = self.archived.pop(event_id)
+            event.status = EventStatus.ACTIVE
+            self._index_active(event)
+            count += 1
+        self.total_archive_operations += 1
+        self.recalculate_all_associations()
+        self._record("UNARCHIVE", before, f"Restaurar {count} eventos archivados")
+        return count
